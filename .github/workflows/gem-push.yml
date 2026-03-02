@@ -1,0 +1,27 @@
+name: Publish Gem
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+
+      - name: Build gem
+        run: gem build rails-informant.gemspec
+
+      - name: Push to RubyGems
+        uses: rubygems/release-gem@v1

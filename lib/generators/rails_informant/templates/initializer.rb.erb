@@ -1,0 +1,27 @@
+RailsInformant.configure do |config|
+  # Error capture — disable in development/test by default
+  config.capture_errors = !Rails.env.local?
+
+  # API token for the JSON API (required for MCP server access)
+  config.api_token = Rails.application.credentials.dig(:rails_informant, :api_token)
+
+  # Slack webhook URL for error notifications
+  # config.slack_webhook_url = Rails.application.credentials.dig(:rails_informant, :slack_webhook_url)
+
+  # Webhook URL for generic HTTP notifications (PII stripped by default)
+  # config.webhook_url = "https://example.com/webhooks/errors"
+  # config.webhook_include_context = false
+
+  # Devin AI — autonomous error fixing (requires MCP server + playbook)
+  # config.devin_api_key = Rails.application.credentials.dig(:rails_informant, :devin_api_key)
+  # config.devin_playbook_id = "your-playbook-id"
+
+  # User detection — uncomment if not using CurrentAttributes or Warden
+  # config.current_user_method = -> { Current.user }
+
+  # Additional parameter filtering beyond Rails defaults
+  # config.filter_parameters = []
+
+  # Auto-purge resolved errors after N days (nil = keep forever)
+  # config.retention_days = 30
+end

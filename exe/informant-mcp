@@ -1,0 +1,22 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "mcp"
+require "optparse"
+require "rails_informant/mcp"
+
+options = {}
+OptionParser.new do |opts|
+  opts.banner = "Usage: informant-mcp [options]"
+  opts.on("--allow-insecure", "Allow HTTP connections (development only)") do
+    options[:allow_insecure] = true
+  end
+end.parse!
+
+config = RailsInformant::Mcp::Configuration.new(allow_insecure: options[:allow_insecure])
+server = RailsInformant::Mcp::Server.build(config)
+
+transport = MCP::Server::Transports::StdioTransport.new(server)
+transport.open
