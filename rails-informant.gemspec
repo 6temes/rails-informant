@@ -12,6 +12,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata = {
     "bug_tracker_uri" => "https://github.com/6temes/rails-informant/issues",
+    "changelog_uri" => "https://github.com/6temes/rails-informant/releases",
     "rubygems_mfa_required" => "true",
     "source_code_uri" => "https://github.com/6temes/rails-informant"
   }
