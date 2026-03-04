@@ -50,7 +50,7 @@ bin/rails generate rails_informant:install
 bin/rails db:migrate
 ```
 
-This creates a migration for `informant_error_groups` and `informant_occurrences` tables and an initializer at `config/initializers/rails_informant.rb`.
+This creates a migration for `informant_error_groups` and `informant_occurrences` tables, an initializer at `config/initializers/rails_informant.rb`, and mounts the engine at `/informant`.
 
 Optional generators for AI agent integration:
 
