@@ -7,7 +7,7 @@ module RailsInformant
 
     source_root File.expand_path("templates", __dir__)
 
-    def create_migration
+    def create_migration_file
       migration_template "create_informant_tables.rb.erb",
         "db/migrate/create_informant_tables.rb"
     end
