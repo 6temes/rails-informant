@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -19,9 +19,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "4.0"
-
-      - name: Build gem
-        run: gem build rails-informant.gemspec
+          bundler-cache: true
 
       - name: Push to RubyGems
         uses: rubygems/release-gem@v1
