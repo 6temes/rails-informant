@@ -4,6 +4,18 @@ require "tmpdir"
 module RailsInformant
   module Mcp
     class ConfigurationTest < Minitest::Test
+      def setup
+        @saved_env = ENV.select { |k, _| k.start_with?("INFORMANT_") }
+        @saved_env.each_key { |k| ENV.delete(k) }
+      end
+
+      def teardown
+        # Clear any INFORMANT_ vars set by tests
+        ENV.each_key { |k| ENV.delete(k) if k.start_with?("INFORMANT_") }
+        # Restore original values
+        @saved_env.each { |k, v| ENV[k] = v }
+      end
+
       def test_raises_when_config_file_is_world_readable
         with_temp_config(mode: 0644) do |path|
           error = assert_raises(RuntimeError) do
@@ -105,8 +117,6 @@ module RailsInformant
         result = config.send(:interpolate, "prefix-${INFORMANT_TEST_VALUE}-suffix")
 
         assert_equal "prefix-secret123-suffix", result
-      ensure
-        ENV.delete("INFORMANT_TEST_VALUE")
       end
 
       def test_interpolate_ignores_non_informant_prefixed_vars
@@ -136,8 +146,6 @@ module RailsInformant
           assert_equal "resolved-secret", envs["production"][:token]
           assert_equal "https://app.example.com", envs["production"][:url]
         end
-      ensure
-        ENV.delete("INFORMANT_PROD_TOKEN")
       end
 
       def test_load_from_yaml_does_not_interpolate_url
@@ -156,8 +164,6 @@ module RailsInformant
           assert_equal "https://prefix-${INFORMANT_PROD_TOKEN}.example.com", envs["production"][:url]
           assert_equal "static-token", envs["production"][:token]
         end
-      ensure
-        ENV.delete("INFORMANT_PROD_TOKEN")
       end
 
       def test_no_public_environments_accessor
