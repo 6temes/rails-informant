@@ -1,7 +1,7 @@
 require "test_helper"
 
 class RailsInformant::InitializedTest < ActiveSupport::TestCase
-  test "returns true when capture_errors enabled and pool connected" do
+  test "returns true when capture_errors enabled and database available" do
     assert RailsInformant.initialized?
   end
 
@@ -13,8 +13,8 @@ class RailsInformant::InitializedTest < ActiveSupport::TestCase
   test "caches result after first successful check" do
     assert RailsInformant.initialized?
 
-    # After caching, connection_pool.connected? must not be called again
-    ActiveRecord::Base.connection_pool.expects(:connected?).never
+    # After caching, with_connection must not be called again
+    ActiveRecord::Base.connection_pool.expects(:with_connection).never
     assert RailsInformant.initialized?
   end
 
@@ -22,14 +22,19 @@ class RailsInformant::InitializedTest < ActiveSupport::TestCase
     assert RailsInformant.initialized?
     RailsInformant.reset_caches!
 
-    # After reset, it should re-check the connection pool
-    ActiveRecord::Base.connection_pool.expects(:connected?).returns(true)
     assert RailsInformant.initialized?
   end
 
   test "returns false when connection not established" do
     RailsInformant.reset_caches!
-    ActiveRecord::Base.connection_pool.stubs(:connected?).raises(ActiveRecord::ConnectionNotEstablished)
+    ActiveRecord::Base.connection_pool.stubs(:with_connection).raises(ActiveRecord::ConnectionNotEstablished)
+
+    assert_not RailsInformant.initialized?
+  end
+
+  test "returns false when database does not exist" do
+    RailsInformant.reset_caches!
+    ActiveRecord::Base.connection_pool.stubs(:with_connection).raises(ActiveRecord::NoDatabaseError)
 
     assert_not RailsInformant.initialized?
   end
@@ -120,12 +125,12 @@ class RailsInformant::InitializedTest < ActiveSupport::TestCase
   test "retries after a failed check" do
     RailsInformant.reset_caches!
 
-    # First call: pool not connected
-    ActiveRecord::Base.connection_pool.stubs(:connected?).returns(false)
+    # First call: database unavailable
+    ActiveRecord::Base.connection_pool.stubs(:with_connection).raises(ActiveRecord::ConnectionNotEstablished)
     assert_not RailsInformant.initialized?
 
-    # Second call: pool now connected — should re-check since false was not cached
-    ActiveRecord::Base.connection_pool.stubs(:connected?).returns(true)
+    # Second call: database now available — should re-check since false was not cached
+    ActiveRecord::Base.connection_pool.unstub(:with_connection)
     assert RailsInformant.initialized?
   end
 
