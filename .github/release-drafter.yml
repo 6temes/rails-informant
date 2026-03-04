@@ -4,3 +4,5 @@ template: |
   $CHANGES
 change-template: "- $TITLE (#$NUMBER)"
 no-changes-template: "No changes."
+version-resolver:
+  default: patch
