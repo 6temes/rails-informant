@@ -83,8 +83,8 @@ module RailsInformant
     def initialized?
       return @_initialized if defined?(@_initialized) && @_initialized
 
-      @_initialized = capture_errors && defined?(ActiveRecord::Base) && ActiveRecord::Base.connection_pool.connected?
-    rescue ActiveRecord::ConnectionNotEstablished
+      @_initialized = capture_errors && defined?(ActiveRecord::Base) && ActiveRecord::Base.connection_pool.with_connection { true }
+    rescue ActiveRecord::ConnectionNotEstablished, ActiveRecord::NoDatabaseError
       false
     end
 
