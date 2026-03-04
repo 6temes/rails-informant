@@ -16,5 +16,9 @@ module RailsInformant
       template "initializer.rb.erb",
         "config/initializers/rails_informant.rb"
     end
+
+    def mount_engine
+      route "mount RailsInformant::Engine => '/informant'"
+    end
   end
 end
