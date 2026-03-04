@@ -1,3 +1,3 @@
 module RailsInformant
-  VERSION = File.read(File.expand_path("../../../VERSION", __FILE__)).strip
+  VERSION = ENV.fetch("RAILS_INFORMANT_VERSION", "0.0.0.dev")
 end

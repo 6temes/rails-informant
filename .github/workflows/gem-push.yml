@@ -21,5 +21,11 @@ jobs:
           ruby-version: "4.0"
           bundler-cache: true
 
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Push to RubyGems
         uses: rubygems/release-gem@1c162a739e8b4cb21a676e97b087e8268d8fc40b # v1.1.2
+        env:
+          RAILS_INFORMANT_VERSION: ${{ steps.version.outputs.version }}
