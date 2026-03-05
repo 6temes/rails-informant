@@ -13,10 +13,11 @@
   <p>
     <a href="#why-rails-informant">Why Rails Informant?</a>
     &#9670; <a href="#quick-start">Quick Start</a>
+    &#9670; <a href="#agent-setup">Agent Setup</a>
     &#9670; <a href="#configuration">Configuration</a>
     &#9670; <a href="#mcp-server">MCP Server</a>
     &#9670; <a href="#architecture">Architecture</a>
-    &#9670; <a href="#data--privacy">Data & Privacy</a>
+    &#9670; <a href="#data-and-privacy">Data and Privacy</a>
     &#9670; <a href="#security">Security</a>
   </p>
 </div>
@@ -65,6 +66,38 @@ Errors are captured automatically in non-local environments. To capture errors m
 RailsInformant.capture(exception, context: { order_id: 42 })
 ```
 
+## Agent Setup
+
+End-to-end path for AI agents (Claude Code, Devin) to start triaging errors:
+
+1. **Install the gem** -- follow [Quick Start](#quick-start) above
+2. **Set an authentication token** in your Rails credentials or env var:
+   ```ruby
+   # config/initializers/rails_informant.rb
+   config.api_token = Rails.application.credentials.dig(:rails_informant, :api_token)
+   ```
+3. **Add the MCP server** to your agent's config (see [MCP Server](#mcp-server) for full options):
+   ```json
+   {
+     "mcpServers": {
+       "informant": {
+         "command": "informant-mcp",
+         "env": {
+           "INFORMANT_PRODUCTION_URL": "https://myapp.com",
+           "INFORMANT_PRODUCTION_TOKEN": "your-api-token"
+         }
+       }
+     }
+   }
+   ```
+4. **Install the Claude Code skill** (optional but recommended):
+   ```sh
+   bin/rails generate rails_informant:skill
+   ```
+5. **Use `/informant`** in Claude Code to triage and fix errors, or let Devin handle them autonomously with the [Devin integration](#devin-ai).
+
+> **Env var scoping:** `INFORMANT_API_TOKEN` configures the Rails app. `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` configure the MCP server (agent side). They are different processes -- both need a token, but the MCP env vars point the agent at your running app.
+
 ## Configuration
 
 ```ruby
@@ -77,11 +110,11 @@ RailsInformant.configure do |config|
 end
 ```
 
-Every option can be set via an environment variable. The initializer takes precedence over env vars.
+Every option can be set via an environment variable. The initializer takes precedence over env vars. These configure the **Rails app**. For MCP server env vars (agent side), see [Agent Setup](#agent-setup).
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
-| `api_token` | `INFORMANT_API_TOKEN` | `nil` | Bearer token for API authentication (required for MCP) |
+| `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for MCP server access |
 | `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture (set to `"false"` to disable) |
 | `devin_api_key` | `INFORMANT_DEVIN_API_KEY` | `nil` | Devin AI API key for autonomous error fixing |
 | `devin_playbook_id` | `INFORMANT_DEVIN_PLAYBOOK_ID` | `nil` | Devin playbook ID for error triage workflow |
@@ -114,32 +147,9 @@ config.ignored_exceptions = ["MyApp::BoringError", /Stripe::/]
 
 Structured events from `ActiveSupport::Notifications` are captured automatically as breadcrumbs -- SQL query names, cache hits, template renders, HTTP calls, job executions. Stored per-occurrence for rich debugging context without raw log lines.
 
-## API
-
-Token-authenticated JSON API mounted at `/informant/api/v1/`.
-
-```text
-GET    /informant/api/v1/errors            # List error groups (paginated, filterable)
-GET    /informant/api/v1/errors/:id         # Show with recent occurrences
-PATCH  /informant/api/v1/errors/:id         # Update status or notes
-DELETE /informant/api/v1/errors/:id         # Delete group and occurrences
-PATCH  /informant/api/v1/errors/:id/fix_pending  # Mark fix pending
-PATCH  /informant/api/v1/errors/:id/duplicate    # Mark as duplicate
-GET    /informant/api/v1/occurrences        # List occurrences
-GET    /informant/api/v1/status             # Error monitoring summary
-```
-
-Authenticate with `Authorization: Bearer <token>`.
-
 ## MCP Server
 
 The bundled `informant-mcp` executable connects Claude Code to your error data via [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
-
-The MCP server requires the `mcp` gem, which is not a runtime dependency. Add it to your Gemfile:
-
-```ruby
-gem "mcp", ">= 0.7", "< 2"
-```
 
 ### Setup
 
@@ -233,12 +243,12 @@ The notification prompt includes: error class, error message (truncated), severi
 Development Machine                    Remote Servers
 +-----------------------+              +-----------------------+
 |  Claude Code          |              |  Production           |
-|        |              |              |  /informant/api/v1    |
+|        |              |              |  /informant           |
 |        | stdio        |              +-----------------------+
 |        v              |  HTTPS+Token
 |  MCP Server           | -----------> +-----------------------+
 |  (exe/informant-mcp)  |              |  Staging              |
-|                       |              |  /informant/api/v1    |
+|                       |              |  /informant           |
 +-----------------------+              +-----------------------+
 
 Inside the Rails app:
@@ -288,7 +298,7 @@ bin/rails informant:stats    # Show error monitoring statistics
 bin/rails informant:purge    # Purge resolved errors older than retention_days
 ```
 
-## Data & Privacy
+## Data and Privacy
 
 Each occurrence stores the following PII:
 
@@ -314,18 +324,18 @@ This replaces email values with `[FILTERED]` in occurrence data. IP addresses ca
 
 ## Security
 
-- API requires bearer token authentication (`secure_compare`)
+- MCP server requires token authentication (`secure_compare`)
 - All stored context is filtered through `ActiveSupport::ParameterFilter`
 - MCP server enforces HTTPS by default
 - Security headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
 - Error capture never breaks the host application
 - Webhook payloads strip PII by default
-- **Rate limiting** -- the API does not include built-in rate limiting. Add rate limiting on the `/informant/api/` prefix in production, for example with [Rack::Attack](https://github.com/rack/rack-attack):
+- **Rate limiting** -- the engine does not include built-in rate limiting. Add rate limiting on the `/informant/` prefix in production, for example with [Rack::Attack](https://github.com/rack/rack-attack):
 
 ```ruby
 # config/initializers/rack_attack.rb
-Rack::Attack.throttle("informant/api", limit: 60, period: 1.minute) do |req|
-  req.ip if req.path.start_with?("/informant/api/")
+Rack::Attack.throttle("informant", limit: 60, period: 1.minute) do |req|
+  req.ip if req.path.start_with?("/informant/")
 end
 ```
 
