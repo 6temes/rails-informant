@@ -23,6 +23,8 @@ module RailsInformant
           "mcpServers" => { "informant" => informant_entry }
         ) + "\n"
       end
+    rescue JSON::ParserError
+      say "Could not parse existing .mcp.json — skipping merge. Add the informant server manually.", :red
     end
 
     def print_next_steps
