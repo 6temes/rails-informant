@@ -13,7 +13,6 @@
   <p>
     <a href="#why-rails-informant">Why Rails Informant?</a>
     &#9670; <a href="#quick-start">Quick Start</a>
-    &#9670; <a href="#agent-setup">Agent Setup</a>
     &#9670; <a href="#configuration">Configuration</a>
     &#9670; <a href="#mcp-server">MCP Server</a>
     &#9670; <a href="#architecture">Architecture</a>
@@ -44,20 +43,30 @@ Add to your Gemfile:
 gem "rails-informant"
 ```
 
-Run the install generator:
+Install:
 
 ```sh
+bundle install
 bin/rails generate rails_informant:install
 bin/rails db:migrate
 ```
 
-This creates a migration for `informant_error_groups` and `informant_occurrences` tables, an initializer at `config/initializers/rails_informant.rb`, and mounts the engine at `/informant`.
-
-Optional generators for AI agent integration:
+Set an authentication token:
 
 ```sh
-bin/rails generate rails_informant:skill   # Claude Code skill at .claude/skills/informant/SKILL.md
-bin/rails generate rails_informant:devin   # Devin playbook at .devin/error-triage.devin.md
+bin/rails credentials:edit
+```
+
+```yaml
+rails_informant:
+  api_token: your-secret-token  # generate with: openssl rand -hex 32
+```
+
+Install your AI agent integration:
+
+```sh
+bin/rails generate rails_informant:skill   # Claude Code
+bin/rails generate rails_informant:devin   # Devin AI
 ```
 
 Errors are captured automatically in non-local environments. To capture errors manually:
@@ -65,33 +74,6 @@ Errors are captured automatically in non-local environments. To capture errors m
 ```ruby
 RailsInformant.capture(exception, context: { order_id: 42 })
 ```
-
-## Agent Setup
-
-End-to-end path for AI agents (Claude Code, Devin) to start triaging errors:
-
-1. **Install the gem** -- follow [Quick Start](#quick-start) above. The install generator creates `.mcp.json` automatically.
-2. **Set an authentication token** in your Rails credentials or env var:
-   ```ruby
-   # config/initializers/rails_informant.rb
-   config.api_token = Rails.application.credentials.dig(:rails_informant, :api_token)
-   ```
-3. **Set env vars** for the MCP server (e.g., via `.envrc` + [direnv](https://direnv.net)):
-   ```sh
-   # .envrc
-   export INFORMANT_PRODUCTION_URL=https://myapp.com
-   export INFORMANT_PRODUCTION_TOKEN=your-api-token
-   ```
-   The MCP server process inherits environment variables from your shell, so `INFORMANT_*` vars set via `.envrc` (or any other method) are picked up automatically -- no need to inline them in `.mcp.json`.
-4. **Install the Claude Code skill** (optional but recommended):
-   ```sh
-   bin/rails generate rails_informant:skill
-   ```
-5. **Use `/informant`** in Claude Code to triage and fix errors, or let Devin handle them autonomously with the [Devin integration](#devin-ai).
-
-> **Connecting the tokens:** The `api_token` in your Rails credentials and `INFORMANT_PRODUCTION_TOKEN` must be the **same value**. The first authenticates incoming requests to your app; the second tells the MCP server what token to send.
-
-> **Secrets hygiene:** `.envrc` contains secrets and should be in `.gitignore`. `.mcp.json` is safe to commit -- it only contains the command name, no tokens.
 
 ## Configuration
 
@@ -105,7 +87,7 @@ RailsInformant.configure do |config|
 end
 ```
 
-Every option can be set via an environment variable. The initializer takes precedence over env vars. These configure the **Rails app**. For MCP server env vars (agent side), see [Agent Setup](#agent-setup).
+Every option can be set via an environment variable. The initializer takes precedence over env vars. These configure the **Rails app**. For MCP server env vars (agent side), see [MCP Server > Setup](#setup).
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
@@ -118,6 +100,10 @@ Every option can be set via an environment variable. The initializer takes prece
 | `slack_webhook_url` | `INFORMANT_SLACK_WEBHOOK_URL` | `nil` | Slack incoming webhook URL |
 | `capture_user_email` | _(none)_ | `false` | Capture email from detected user (PII -- opt-in) |
 | `webhook_url` | `INFORMANT_WEBHOOK_URL` | `nil` | Generic webhook URL for notifications |
+
+> **Connecting the tokens:** The `api_token` in your Rails credentials and `INFORMANT_PRODUCTION_TOKEN` must be the **same value**. The first authenticates incoming requests to your app; the second tells the MCP server what token to send.
+
+> **Secrets hygiene:** `.envrc` contains secrets and should be in `.gitignore`. `.mcp.json` is safe to commit -- it only contains the command name, no tokens.
 
 ## Error Capture
 
@@ -148,19 +134,9 @@ The bundled `informant-mcp` executable connects Claude Code to your error data v
 
 ### Setup
 
-The install generator creates `.mcp.json` for you. To set it up manually:
+The `rails_informant:skill` generator creates `.mcp.json` automatically. Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv). The MCP server inherits env vars from your shell.
 
-```json
-{
-  "mcpServers": {
-    "informant": {
-      "command": "informant-mcp"
-    }
-  }
-}
-```
-
-Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv). The MCP server inherits env vars from your shell -- no need to put secrets in `.mcp.json`.
+> `.mcp.json` is used by Claude Code. Devin AI configures MCP servers through the [Devin MCP Marketplace](https://docs.devin.ai/work-with-devin/mcp).
 
 For multi-environment setups, create `~/.config/informant-mcp.yml`:
 
