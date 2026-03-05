@@ -68,18 +68,24 @@ module RailsInformant
 
       token = RailsInformant.api_token
 
-      if token.nil?
-        raise <<~MSG.squish
+      message = if token.nil?
+        <<~MSG.squish
           RailsInformant: api_token must be configured when capture_errors is enabled.
           Set it in your initializer: config.api_token = "your-secret-token"
         MSG
-      end
-
-      if token.length < MINIMUM_TOKEN_LENGTH
-        raise <<~MSG.squish
+      elsif token.length < MINIMUM_TOKEN_LENGTH
+        <<~MSG.squish
           RailsInformant: api_token must be at least #{MINIMUM_TOKEN_LENGTH} characters.
           Use SecureRandom.hex(32) or Rails credentials to generate a secure token.
         MSG
+      end
+
+      return unless message
+
+      if RailsInformant.server_mode?
+        raise message
+      else
+        Rails.logger&.warn message
       end
     end
   end

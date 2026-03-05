@@ -9,7 +9,7 @@ allowed-tools:
   - Glob
   - Edit
   - Write
-  - Bash(bin/test *)
+  - Bash(bin/rails test *)
   - Bash(bundle exec *)
 ---
 

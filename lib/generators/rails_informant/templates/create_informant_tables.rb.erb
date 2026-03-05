@@ -38,13 +38,13 @@ class CreateInformantTables < ActiveRecord::Migration[8.1]
     create_table :informant_occurrences do |t|
       t.references :error_group, null: false,
         foreign_key: { to_table: :informant_error_groups }
-      t.jsonb :backtrace
-      t.jsonb :exception_chain
-      t.jsonb :request_context
-      t.jsonb :user_context
-      t.jsonb :custom_context
-      t.jsonb :environment_context
-      t.jsonb :breadcrumbs
+      t.<%= json_column_type %> :backtrace
+      t.<%= json_column_type %> :exception_chain
+      t.<%= json_column_type %> :request_context
+      t.<%= json_column_type %> :user_context
+      t.<%= json_column_type %> :custom_context
+      t.<%= json_column_type %> :environment_context
+      t.<%= json_column_type %> :breadcrumbs
       t.string :git_sha
       t.timestamps
 
