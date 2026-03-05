@@ -70,33 +70,28 @@ RailsInformant.capture(exception, context: { order_id: 42 })
 
 End-to-end path for AI agents (Claude Code, Devin) to start triaging errors:
 
-1. **Install the gem** -- follow [Quick Start](#quick-start) above
+1. **Install the gem** -- follow [Quick Start](#quick-start) above. The install generator creates `.mcp.json` automatically.
 2. **Set an authentication token** in your Rails credentials or env var:
    ```ruby
    # config/initializers/rails_informant.rb
    config.api_token = Rails.application.credentials.dig(:rails_informant, :api_token)
    ```
-3. **Add the MCP server** to your agent's config (see [MCP Server](#mcp-server) for full options):
-   ```json
-   {
-     "mcpServers": {
-       "informant": {
-         "command": "informant-mcp",
-         "env": {
-           "INFORMANT_PRODUCTION_URL": "https://myapp.com",
-           "INFORMANT_PRODUCTION_TOKEN": "your-api-token"
-         }
-       }
-     }
-   }
+3. **Set env vars** for the MCP server (e.g., via `.envrc` + [direnv](https://direnv.net)):
+   ```sh
+   # .envrc
+   export INFORMANT_PRODUCTION_URL=https://myapp.com
+   export INFORMANT_PRODUCTION_TOKEN=your-api-token
    ```
+   The MCP server process inherits environment variables from your shell, so `INFORMANT_*` vars set via `.envrc` (or any other method) are picked up automatically -- no need to inline them in `.mcp.json`.
 4. **Install the Claude Code skill** (optional but recommended):
    ```sh
    bin/rails generate rails_informant:skill
    ```
 5. **Use `/informant`** in Claude Code to triage and fix errors, or let Devin handle them autonomously with the [Devin integration](#devin-ai).
 
-> **Env var scoping:** `INFORMANT_API_TOKEN` configures the Rails app. `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` configure the MCP server (agent side). They are different processes -- both need a token, but the MCP env vars point the agent at your running app.
+> **Connecting the tokens:** The `api_token` in your Rails credentials and `INFORMANT_PRODUCTION_TOKEN` must be the **same value**. The first authenticates incoming requests to your app; the second tells the MCP server what token to send.
+
+> **Secrets hygiene:** `.envrc` contains secrets and should be in `.gitignore`. `.mcp.json` is safe to commit -- it only contains the command name, no tokens.
 
 ## Configuration
 
@@ -153,23 +148,21 @@ The bundled `informant-mcp` executable connects Claude Code to your error data v
 
 ### Setup
 
-Add to your Claude Code MCP config:
+The install generator creates `.mcp.json` for you. To set it up manually:
 
 ```json
 {
   "mcpServers": {
     "informant": {
-      "command": "informant-mcp",
-      "env": {
-        "INFORMANT_PRODUCTION_URL": "https://myapp.com",
-        "INFORMANT_PRODUCTION_TOKEN": "your-api-token"
-      }
+      "command": "informant-mcp"
     }
   }
 }
 ```
 
-Or create `~/.config/informant-mcp.yml` for multi-environment setups:
+Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv). The MCP server inherits env vars from your shell -- no need to put secrets in `.mcp.json`.
+
+For multi-environment setups, create `~/.config/informant-mcp.yml`:
 
 ```yaml
 environments:
@@ -197,6 +190,23 @@ environments:
 | `annotate_error` | Add investigation notes |
 | `get_informant_status` | Summary with counts and top errors |
 | `list_occurrences` | List occurrences with filtering |
+
+### Local Development
+
+The MCP server enforces HTTPS by default. When pointing at a local HTTP URL (e.g., `http://localhost:3000`), pass `--allow-insecure`:
+
+```json
+{
+  "mcpServers": {
+    "informant": {
+      "command": "informant-mcp",
+      "args": ["--allow-insecure"]
+    }
+  }
+}
+```
+
+This is only needed for local development/testing. Production setups over HTTPS don't need it.
 
 ## Claude Code Skill
 
