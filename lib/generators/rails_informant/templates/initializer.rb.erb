@@ -15,7 +15,7 @@ RailsInformant.configure do |config|
   # Or override what is captured by setting user context explicitly:
   #   RailsInformant::Current.user_context = { id: current_user.id }
 
-  # API token for the JSON API (required for MCP server access)
+  # Authentication token (required for MCP server access)
   config.api_token = Rails.application.credentials.dig(:rails_informant, :api_token)
 
   # Slack webhook URL for error notifications

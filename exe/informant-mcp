@@ -3,11 +3,7 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
-begin
-  require "mcp"
-rescue LoadError
-  abort 'The "mcp" gem is required to run the Informant MCP server. Add gem "mcp", ">= 0.7", "< 2" to your Gemfile and run bundle install.'
-end
+require "mcp"
 
 require "optparse"
 require "rails_informant/mcp"
