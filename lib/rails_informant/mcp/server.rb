@@ -9,6 +9,7 @@ module RailsInformant
         2. List unresolved errors with `list_errors(status: "unresolved")`
         3. Pick the highest-impact error
         4. Investigate with `get_error` (includes up to 10 recent occurrences)
+        5. For errors with many occurrences, use `list_occurrences` to paginate through all of them
 
         ## Assessment Criteria
         Prioritize by: frequency (occurrence count), impact (affects critical paths),
@@ -23,10 +24,11 @@ module RailsInformant
 
         ## Resolution Strategies
         - Clear fix available → write fix, call `mark_fix_pending` with commit SHAs
-        - Not actionable → `ignore_error` with a reason
+        - Not actionable → `annotate_error` with reason, then `ignore_error`
         - Same root cause as another → `mark_duplicate` with target ID
         - Needs context → `annotate_error` with findings
         - Already fixed → `resolve_error`
+        - Test data or mistakes → `delete_error` (irreversible; prefer resolve or ignore)
 
         ## Pagination
         List responses include: "Page X, per_page: Y, has_more: true/false".
