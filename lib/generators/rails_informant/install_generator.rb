@@ -34,9 +34,8 @@ module RailsInformant
       say "       # Add: rails_informant:"
       say "       #        api_token: #{SecureRandom.hex 32}"
       say ""
-      say "  3. Install your AI agent integration:"
-      say "       bin/rails generate rails_informant:skill   # Claude Code"
-      say "       bin/rails generate rails_informant:devin   # Devin AI"
+      say "  3. Install Claude Code integration:"
+      say "       bin/rails generate rails_informant:skill"
       say ""
     end
 

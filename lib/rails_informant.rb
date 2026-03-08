@@ -47,7 +47,6 @@ module RailsInformant
   end
 
   module Notifiers
-    autoload :Devin, "rails_informant/notifiers/devin"
     autoload :NotificationPolicy, "rails_informant/notifiers/notification_policy"
     autoload :Slack, "rails_informant/notifiers/slack"
     autoload :Webhook, "rails_informant/notifiers/webhook"
@@ -60,8 +59,6 @@ module RailsInformant
     delegate :api_token,
              :capture_errors,
              :capture_user_email,
-             :devin_api_key,
-             :devin_playbook_id,
              :ignored_exceptions,
              :notifiers,
              :retention_days,

@@ -17,8 +17,6 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     config = RailsInformant::Configuration.new
     config.slack_webhook_url = nil
     config.webhook_url = nil
-    config.devin_api_key = nil
-    config.devin_playbook_id = nil
 
     assert_equal [], config.notifiers
   end
@@ -27,7 +25,6 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     config = RailsInformant::Configuration.new
     config.slack_webhook_url = "https://hooks.slack.com/test"
     config.webhook_url = nil
-    config.devin_api_key = nil
 
     assert_equal 1, config.notifiers.size
     assert_kind_of RailsInformant::Notifiers::Slack, config.notifiers.first
@@ -37,39 +34,15 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     config = RailsInformant::Configuration.new
     config.webhook_url = "https://example.com/webhook"
     config.slack_webhook_url = nil
-    config.devin_api_key = nil
 
     assert_equal 1, config.notifiers.size
     assert_kind_of RailsInformant::Notifiers::Webhook, config.notifiers.first
-  end
-
-  test "notifiers includes Devin when api_key and playbook_id configured" do
-    config = RailsInformant::Configuration.new
-    config.devin_api_key = "key-123"
-    config.devin_playbook_id = "pb-456"
-    config.slack_webhook_url = nil
-    config.webhook_url = nil
-
-    assert_equal 1, config.notifiers.size
-    assert_kind_of RailsInformant::Notifiers::Devin, config.notifiers.first
-  end
-
-  test "notifiers excludes Devin when only api_key configured" do
-    config = RailsInformant::Configuration.new
-    config.devin_api_key = "key-123"
-    config.devin_playbook_id = nil
-    config.slack_webhook_url = nil
-    config.webhook_url = nil
-
-    assert_equal [], config.notifiers
   end
 
   test "add_notifier appends custom notifier" do
     config = RailsInformant::Configuration.new
     config.slack_webhook_url = nil
     config.webhook_url = nil
-    config.devin_api_key = nil
-
     custom = Object.new
     config.add_notifier custom
 
@@ -80,8 +53,6 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     config = RailsInformant::Configuration.new
     config.slack_webhook_url = "https://hooks.slack.com/test"
     config.webhook_url = nil
-    config.devin_api_key = nil
-
     custom = Object.new
     config.add_notifier custom
 
@@ -95,8 +66,6 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     config = RailsInformant::Configuration.new
     config.slack_webhook_url = nil
     config.webhook_url = nil
-    config.devin_api_key = nil
-
     first = Object.new
     second = Object.new
     config.add_notifier first
@@ -145,7 +114,6 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
   test "custom notifiers survive config reset" do
     RailsInformant.config.slack_webhook_url = nil
     RailsInformant.config.webhook_url = nil
-    RailsInformant.config.devin_api_key = nil
 
     custom = Object.new
     RailsInformant.config.add_notifier custom

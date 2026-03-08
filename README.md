@@ -23,16 +23,15 @@
 
 ---
 
-Captures exceptions, stores them in your app's database with rich context (backtraces, breadcrumbs, request data), sends notifications, and exposes error data via a bundled MCP server -- so Claude Code and Devin AI can query, triage, and fix production errors directly.
+Captures exceptions, stores them in your app's database with rich context (backtraces, breadcrumbs, request data), sends notifications, and exposes error data via a bundled MCP server -- so AI agents can query, triage, and fix production errors directly.
 
 No dashboard. The agent *is* the interface.
 
 ## Why Rails Informant?
 
 - **Agent-native** -- 12 MCP tools let AI agents list, inspect, resolve, and fix errors without a browser. The `/informant` Claude Code skill provides a complete triage-to-fix workflow.
-- **Self-hosted** -- Errors stay in your database. No external service, no data leaving your infrastructure (unless you configure Slack, webhook, or Devin notifications).
+- **Self-hosted** -- Errors stay in your database. No external service, no data leaving your infrastructure (unless you configure Slack or webhook notifications).
 - **Zero-config capture** -- Errors captured automatically via `Rails.error` subscriber and Rack middleware. Breadcrumbs from `ActiveSupport::Notifications` provide structured debugging context.
-- **Autonomous fixing** -- Devin AI integration triggers investigation sessions on new errors, writes fixes with tests, and opens draft PRs. Humans retain the merge button.
 - **Lightweight** -- Two database tables, no Redis, no background workers beyond ActiveJob. Runtime dependencies: Rails 8.1+ only.
 
 ## Quick Start
@@ -62,11 +61,10 @@ rails_informant:
   api_token: your-secret-token  # generate with: openssl rand -hex 32
 ```
 
-Install your AI agent integration:
+Install Claude Code integration:
 
 ```sh
-bin/rails generate rails_informant:skill   # Claude Code
-bin/rails generate rails_informant:devin   # Devin AI
+bin/rails generate rails_informant:skill
 ```
 
 Errors are captured automatically in non-local environments. To capture errors manually:
@@ -93,8 +91,6 @@ Every option can be set via an environment variable. The initializer takes prece
 |--------|---------|---------|-------------|
 | `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for MCP server access |
 | `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture (set to `"false"` to disable) |
-| `devin_api_key` | `INFORMANT_DEVIN_API_KEY` | `nil` | Devin AI API key for autonomous error fixing |
-| `devin_playbook_id` | `INFORMANT_DEVIN_PLAYBOOK_ID` | `nil` | Devin playbook ID for error triage workflow |
 | `ignored_exceptions` | `INFORMANT_IGNORED_EXCEPTIONS` | `[]` | Exception classes to skip (comma-separated in env var) |
 | `retention_days` | `INFORMANT_RETENTION_DAYS` | `nil` | Auto-purge resolved errors after N days |
 | `slack_webhook_url` | `INFORMANT_SLACK_WEBHOOK_URL` | `nil` | Slack incoming webhook URL |
@@ -135,8 +131,6 @@ The bundled `informant-mcp` executable connects Claude Code to your error data v
 ### Setup
 
 The `rails_informant:skill` generator creates `.mcp.json` automatically. Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv). The MCP server inherits env vars from your shell.
-
-> `.mcp.json` is used by Claude Code. Devin AI configures MCP servers through the [Devin MCP Marketplace](https://docs.devin.ai/work-with-devin/mcp).
 
 For multi-environment setups, create `~/.config/informant-mcp.yml`:
 
@@ -194,35 +188,6 @@ Use `/informant` in Claude Code to triage and fix errors interactively. The skil
 4. Implements fixes with test-first workflow
 5. Marks `fix_pending` for auto-resolution on deploy
 
-## Devin AI
-
-Automate error investigation and fixing with [Devin AI](https://devin.ai). When a new error is captured, Rails Informant creates a Devin session that investigates via MCP tools, writes a fix with tests, and opens a draft PR.
-
-### Setup
-
-1. Add the `informant-mcp` server to Devin's [MCP Marketplace](https://docs.devin.ai/work-with-devin/mcp) with your API URL and token.
-
-2. Upload the playbook installed at `.devin/error-triage.devin.md` to Devin and note the playbook ID. See [Creating Playbooks](https://docs.devin.ai/product-guides/creating-playbooks).
-
-3. Configure Rails Informant:
-
-```ruby
-RailsInformant.configure do |config|
-  config.devin_api_key = Rails.application.credentials.dig(:rails_informant, :devin_api_key)
-  config.devin_playbook_id = "your-playbook-id"
-end
-```
-
-### How It Works
-
-- Triggers on the **first occurrence only** -- repeated occurrences of the same error do not create additional Devin sessions.
-- Sends error class, message (truncated to 500 chars), severity, backtrace (first 5 frames), and error group ID.
-- Devin connects to your MCP server to investigate errors, then either opens a draft PR with a fix or annotates the error with investigation findings.
-
-### Data Sent to Devin
-
-The notification prompt includes: error class, error message (truncated), severity, occurrence count, timestamps, controller action or job class, backtrace frames, and git SHA. It does **not** include request parameters, user context, or PII.
-
 ## Architecture
 
 ```text
@@ -254,7 +219,6 @@ Inside the Rails app:
 |  NotifyJob.perform_later (async dispatch)       |
 |    - Slack (Block Kit, Net::HTTP)               |
 |    - Webhook (PII stripped by default)          |
-|    - Devin AI (creates investigation session)   |
 +-------------------------------------------------+
 ```
 
