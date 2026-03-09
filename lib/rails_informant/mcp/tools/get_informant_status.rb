@@ -13,7 +13,11 @@ module RailsInformant
 
         def self.call(server_context:, environment: nil)
           with_client(server_context:, environment:) do |client|
-            text_response(client.status)
+            result = client.status
+            if result["fix_pending_count"]&.positive?
+              result["hint"] = "#{result["fix_pending_count"]} error(s) awaiting fix verification. Run verify_pending_fixes to check if their fixes have been deployed."
+            end
+            text_response result
           end
         end
       end

@@ -27,7 +27,13 @@ When implementing a fix:
 5. Verify test passes
 6. Commit + open draft PR
 7. Call `mark_fix_pending` with fix_sha, original_sha, and fix_pr_url
-   (The server auto-resolves when the fix is deployed)
+
+## Verify Deployed Fixes
+
+After a deploy, run `verify_pending_fixes` to confirm fix_pending errors are resolved.
+This checks if each fix_sha is an ancestor of the deployed code using git locally.
+Check `get_informant_status` — if `deploy_sha` has changed since you last checked, a deploy has occurred.
+Ensure the local repo is up to date (`git fetch`) before running verification.
 
 ## Important Notes
 
