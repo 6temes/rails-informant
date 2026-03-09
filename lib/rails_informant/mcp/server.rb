@@ -6,10 +6,11 @@ module RailsInformant
 
         ## Triage Workflow
         1. Check `get_informant_status` for overview counts by status
-        2. List unresolved errors with `list_errors(status: "unresolved")`
-        3. Pick the highest-impact error
-        4. Investigate with `get_error` (includes up to 10 recent occurrences)
-        5. For errors with many occurrences, use `list_occurrences` to paginate through all of them
+        2. If fix_pending count > 0 in the status response, run `verify_pending_fixes` to check deployed fixes
+        3. List unresolved errors with `list_errors(status: "unresolved")`
+        4. Pick the highest-impact error
+        5. Investigate with `get_error` (includes up to 10 recent occurrences)
+        6. For errors with many occurrences, use `list_occurrences` to paginate through all of them
 
         ## Assessment Criteria
         Prioritize by: frequency (occurrence count), impact (affects critical paths),
@@ -23,7 +24,8 @@ module RailsInformant
         duplicate → unresolved
 
         ## Resolution Strategies
-        - Clear fix available → write fix, call `mark_fix_pending` with commit SHAs
+        - Clear fix available → write fix, call `mark_fix_pending` with commit SHAs. After deploy, run `verify_pending_fixes` to confirm and resolve.
+        - Pending fixes deployed → `verify_pending_fixes` checks git ancestry and resolves verified fixes
         - Not actionable → `annotate_error` with reason, then `ignore_error`
         - Same root cause as another → `mark_duplicate` with target ID
         - Needs context → `annotate_error` with findings
@@ -60,7 +62,8 @@ module RailsInformant
         Tools::MarkDuplicate,
         Tools::MarkFixPending,
         Tools::ReopenError,
-        Tools::ResolveError
+        Tools::ResolveError,
+        Tools::VerifyPendingFixes
       ].freeze
 
       def self.build(config)
