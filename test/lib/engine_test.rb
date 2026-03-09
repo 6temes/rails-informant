@@ -59,36 +59,16 @@ class RailsInformant::EngineTest < ActiveSupport::TestCase
     assert_nothing_raised { RailsInformant::Engine.validate_api_token! }
   end
 
-  test "detect_deploy resolves fix_pending groups with different original_sha" do
-    current_sha = "abc1234abc1234abc1234abc1234abc1234abc12"
+  test "log_pending_fixes logs count when fix_pending errors exist" do
     RailsInformant.stubs(:server_mode?).returns(true)
-    RailsInformant.stubs(:current_git_sha).returns(current_sha)
+    create_error_group(fingerprint: "fp-pending").mark_as_fix_pending!(
+      fix_sha: "abc1234", original_sha: "def5678"
+    )
 
-    should_resolve = create_error_group(fingerprint: "fp-resolve")
-    should_resolve.mark_as_fix_pending! fix_sha: "def5678def5678def5678def5678def5678def56", original_sha: "0000000"
+    Rails.logger.expects(:info).with(regexp_matches(/1 error\(s\) awaiting fix verification/))
 
-    should_keep = create_error_group(fingerprint: "fp-keep")
-    should_keep.mark_as_fix_pending! fix_sha: "def5678def5678def5678def5678def5678def56", original_sha: current_sha
-
-    unrelated = create_error_group(fingerprint: "fp-unrelated")
-
-    # Simulate the detect_deploy initializer logic
-    now = Time.current
-    RailsInformant::ErrorGroup
-      .where(status: "fix_pending")
-      .where.not(original_sha: current_sha)
-      .in_batches(of: 100)
-      .update_all(status: "resolved", resolved_at: now, fix_deployed_at: now, updated_at: now)
-
-    should_resolve.reload
-    assert_equal "resolved", should_resolve.status
-    assert_not_nil should_resolve.resolved_at
-    assert_not_nil should_resolve.fix_deployed_at
-
-    should_keep.reload
-    assert_equal "fix_pending", should_keep.status
-
-    unrelated.reload
-    assert_equal "unresolved", unrelated.status
+    # Simulates the initializer logic — see engine.rb log_pending_fixes
+    count = RailsInformant::ErrorGroup.where(status: "fix_pending").count
+    Rails.logger.info "[Informant] #{count} error(s) awaiting fix verification" unless count.zero?
   end
 end

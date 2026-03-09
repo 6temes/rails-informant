@@ -39,19 +39,14 @@ module RailsInformant
       )
     end
 
-    initializer "rails_informant.detect_deploy" do
+    initializer "rails_informant.log_pending_fixes" do
       config.after_initialize do
         next unless RailsInformant.server_mode?
 
-        current_sha = RailsInformant.current_git_sha
-        next unless current_sha
+        count = RailsInformant::ErrorGroup.where(status: "fix_pending").count
+        next if count.zero?
 
-        now = Time.current
-        RailsInformant::ErrorGroup
-          .where(status: "fix_pending")
-          .where.not(original_sha: current_sha)
-          .in_batches(of: 100)
-          .update_all(status: "resolved", resolved_at: now, fix_deployed_at: now, updated_at: now)
+        Rails.logger.info "[Informant] #{count} error(s) awaiting fix verification"
       rescue ActiveRecord::StatementInvalid
         # Table may not exist yet during initial migration
       end
