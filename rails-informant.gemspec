@@ -19,18 +19,6 @@ Gem::Specification.new do |spec|
 
   spec.required_ruby_version = ">= 4.0"
 
-  spec.post_install_message = <<~MSG
-
-    Rails Informant: SKILL.md has been simplified — workflow guidance now
-    auto-updates via MCP server instructions. Regenerate your skill file:
-
-      bin/rails generate rails_informant:skill
-
-    This is a one-time migration. Future gem updates will not require
-    regenerating SKILL.md.
-
-  MSG
-
   spec.files = Dir.chdir(__dir__) do
     Dir["{app,config,db,exe,lib}/**/*", "LICENSE", "Rakefile", "README.md"]
   end
