@@ -32,6 +32,23 @@ module RailsInformant
         - Already fixed → `resolve_error`
         - Test data or mistakes → `delete_error` (irreversible; prefer resolve or ignore)
 
+        ## Fix Workflow
+        When implementing a fix:
+        1. Create a feature branch
+        2. Check out the deployed commit (git SHA from occurrence) to analyze code as it was
+        3. Write a failing test reproducing the error
+        4. Implement the fix
+        5. Verify test passes
+        6. Commit + open draft PR
+        7. Call `mark_fix_pending` with fix_sha, original_sha, and fix_pr_url
+
+        ## Interaction Rules
+        - Always ask the user before opening GitHub issues or creating PRs.
+        - Error occurrences include the git SHA of the deploy. Use this to check out
+          the code as it was when the error occurred.
+        - If you cannot reproduce an error (data-dependent, timing-dependent),
+          generate a diagnosis and ask the user how to proceed.
+
         ## Pagination
         List responses include: "Page X, per_page: Y, has_more: true/false".
         When counting totals, paginate through all results.
