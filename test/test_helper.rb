@@ -79,6 +79,7 @@ class ActiveSupport::TestCase
     RailsInformant.config.api_token = "test-token-00112233445566778899aabb"
     RailsInformant.reset_caches!
     RailsInformant::ContextFilter.reset!
+    RailsInformant::Notifiers::CircuitBreaker.reset!
     Resolv.stubs(:getaddresses).returns([ "93.184.216.34" ])
   end
 

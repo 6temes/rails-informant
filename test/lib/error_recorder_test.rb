@@ -94,7 +94,20 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     end
   end
 
-  test "skips NotifyJob when error originates from notifier" do
+  test "skips recording entirely when delivering_notification flag is set" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+        RailsInformant::Current.delivering_notification = true
+        RailsInformant::ErrorRecorder.record build_error
+      end
+    end
+  ensure
+    RailsInformant::Current.delivering_notification = false
+  end
+
+  test "skips recording entirely when error backtrace includes notifier path" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
 
     error = StandardError.new("SSL error")
@@ -103,12 +116,14 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
       "/gems/informant/lib/rails_informant/notifiers/slack.rb:7:in `notify'"
     ]
 
-    assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
-      RailsInformant::ErrorRecorder.record error
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+        RailsInformant::ErrorRecorder.record error
+      end
     end
   end
 
-  test "enqueues NotifyJob for errors not from notifier" do
+  test "records normally for errors not from informant" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
 
     error = StandardError.new("regular error")

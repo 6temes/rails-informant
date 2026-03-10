@@ -75,4 +75,40 @@ class RailsInformant::NotifyJobTest < ActiveSupport::TestCase
     Net::HTTP.expects(:start).never
     RailsInformant::NotifyJob.perform_now(group)
   end
+
+  test "sets delivering_notification flag during perform" do
+    group = create_error_group_with_occurrence
+
+    observed_flag = nil
+    RailsInformant.config.notifiers.first.stubs(:should_notify?).returns(true)
+    RailsInformant.config.notifiers.first.stubs(:notify).with { observed_flag = RailsInformant::Current.delivering_notification; true }
+
+    stub_http_api
+    RailsInformant::NotifyJob.perform_now(group)
+
+    assert observed_flag, "delivering_notification should be true during perform"
+    assert_not RailsInformant::Current.delivering_notification, "delivering_notification should be false after perform"
+  end
+
+  test "clears delivering_notification flag even when notifier raises" do
+    group = create_error_group_with_occurrence
+    stub_http_failure
+
+    assert_raises(SocketError) { RailsInformant::NotifyJob.new.perform(group) }
+    assert_not RailsInformant::Current.delivering_notification
+  end
+
+  test "discards job on OpenSSL::SSL::SSLError" do
+    group = create_error_group_with_occurrence
+    stub_http_failure error_class: OpenSSL::SSL::SSLError, message: "certificate verify failed"
+
+    assert_nothing_raised { RailsInformant::NotifyJob.perform_now(group) }
+  end
+
+  test "discards job on Errno::ECONNREFUSED" do
+    group = create_error_group_with_occurrence
+    stub_http_failure error_class: Errno::ECONNREFUSED, message: "connection refused"
+
+    assert_nothing_raised { RailsInformant::NotifyJob.perform_now(group) }
+  end
 end

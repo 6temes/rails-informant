@@ -47,6 +47,7 @@ module RailsInformant
   end
 
   module Notifiers
+    autoload :CircuitBreaker, "rails_informant/notifiers/circuit_breaker"
     autoload :NotificationPolicy, "rails_informant/notifiers/notification_policy"
     autoload :Slack, "rails_informant/notifiers/slack"
     autoload :Webhook, "rails_informant/notifiers/webhook"
