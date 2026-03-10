@@ -33,8 +33,6 @@ module RailsInformant
       end
 
       def truncate_to_size(data)
-        return data if data.is_a?(Hash) && data.size < 20
-
         json = data.to_json
         return data if json.bytesize <= MAX_CONTEXT_SIZE
 

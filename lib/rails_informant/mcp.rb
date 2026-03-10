@@ -1,7 +1,6 @@
 require "json"
 require "net/http"
 require "uri"
-require "yaml"
 
 require_relative "version"
 require_relative "mcp/client"

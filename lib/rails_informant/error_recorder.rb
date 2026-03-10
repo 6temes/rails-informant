@@ -47,6 +47,7 @@ module RailsInformant
         keep_ids = group.occurrences.order(created_at: :desc).limit(MAX_OCCURRENCES_PER_GROUP).select(:id)
         Occurrence.where(error_group_id: group.id).where.not(id: keep_ids).delete_all
       end
+
       def notify(group)
         return if Notifiers::CircuitBreaker.open?
         return unless RailsInformant.config.notifiers.any? { it.should_notify?(group) }
