@@ -41,16 +41,20 @@ class RailsInformant::Notifiers::WebhookTest < ActiveSupport::TestCase
     assert_nil payload["occurrence"]
   end
 
-  test "sets SNI hostname for TLS verification against the original hostname" do
+  test "passes resolved IP via ipaddr for SSRF-safe SNI" do
     group = create_error_group
     occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
 
-    stub_http = stub_http_api
+    captured_kwargs = nil
+    response = Net::HTTPOK.new("1.1", "200", "")
+    response.stubs(:body).returns("ok")
+    stub_http = StubHTTP.new(response)
+    Net::HTTP.stubs(:start).with { |_host, _port, **kwargs| captured_kwargs = kwargs; true }.yields(stub_http).returns(response)
 
     @notifier.notify(group, occurrence)
 
-    assert_equal true, stub_http.verify_hostname
-    assert_equal "example.com", stub_http.hostname
+    assert captured_kwargs[:ipaddr].present?
+    assert captured_kwargs[:use_ssl]
   end
 
   test "raises on non-HTTPS URL" do
