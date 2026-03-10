@@ -32,12 +32,11 @@ unresolved=$(echo "$response" | jq -r '.unresolved_count // 0') || exit 0
 # Format error summary
 label="error"
 [[ "$unresolved" -gt 1 ]] && label="errors"
+echo "BLOCKING REQUIREMENT: You MUST mention these production errors to the user before doing anything else."
+echo ""
 echo "🚨 Informant: ${unresolved} unresolved ${label} in production"
 
 echo "$response" | jq -r '
   .top_errors[]? |
   "  - \(.error_class) (\(.total_occurrences) \(if .total_occurrences == 1 then "occurrence" else "occurrences" end))"
 ' 2>/dev/null || true
-
-echo ""
-echo "IMPORTANT: Before responding to the user's request, briefly mention these unresolved production errors so they are aware."
