@@ -201,30 +201,30 @@ class RailsInformant::Notifiers::NotificationPolicyTest < ActiveSupport::TestCas
     response = Net::HTTPOK.new("1.1", "200", "")
     response.stubs(:body).returns("ok")
     stub_http = StubHTTP.new(response)
-    Net::HTTP.stubs(:start).with("93.184.216.34", 443, use_ssl: true, open_timeout: 10, read_timeout: 15, max_retries: 0).yields(stub_http).returns(response)
+    Net::HTTP.stubs(:start).with("hooks.slack.com", 443, use_ssl: true, ipaddr: "93.184.216.34", open_timeout: 10, read_timeout: 15, max_retries: 0).yields(stub_http).returns(response)
 
     assert_nothing_raised { @notifier.send_post url: "https://hooks.slack.com/test" }
   end
 
-  test "connects to resolved IP and sets Host header" do
+  test "connects via ipaddr and sets Host header" do
     Resolv.stubs(:getaddresses).with("hooks.slack.com").returns([ "93.184.216.34" ])
 
     response = Net::HTTPOK.new("1.1", "200", "")
     response.stubs(:body).returns("ok")
     stub_http = StubHTTP.new(response)
 
-    connected_host = nil
-    Net::HTTP.stubs(:start).with { |host, *| connected_host = host; true }.yields(stub_http).returns(response)
+    captured_kwargs = nil
+    Net::HTTP.stubs(:start).with { |_host, _port, **kwargs| captured_kwargs = kwargs; true }.yields(stub_http).returns(response)
 
     @notifier.send_post url: "https://hooks.slack.com/test"
 
-    assert_equal "93.184.216.34", connected_host
+    assert_equal "93.184.216.34", captured_kwargs[:ipaddr]
     assert_equal "hooks.slack.com", stub_http.captured_request["Host"]
   end
 
-  test "prevents DNS rebinding by using resolved IP for connection" do
+  test "prevents DNS rebinding by passing resolved IP via ipaddr" do
     # DNS resolves to public IP during validation, but would resolve to private IP
-    # on second lookup. Since we connect to the resolved IP directly, the second
+    # on second lookup. Since we pass the resolved IP via ipaddr, the second
     # lookup never happens.
     Resolv.stubs(:getaddresses).with("attacker.example.com").returns([ "93.184.216.34" ])
 
@@ -232,13 +232,13 @@ class RailsInformant::Notifiers::NotificationPolicyTest < ActiveSupport::TestCas
     response.stubs(:body).returns("ok")
     stub_http = StubHTTP.new(response)
 
-    connected_host = nil
-    Net::HTTP.stubs(:start).with { |host, *| connected_host = host; true }.yields(stub_http).returns(response)
+    captured_kwargs = nil
+    Net::HTTP.stubs(:start).with { |_host, _port, **kwargs| captured_kwargs = kwargs; true }.yields(stub_http).returns(response)
 
     @notifier.send_post url: "https://attacker.example.com/hook"
 
-    # Connection must go to the validated IP, not back to the hostname
-    assert_equal "93.184.216.34", connected_host
+    # Connection must use the validated IP via ipaddr
+    assert_equal "93.184.216.34", captured_kwargs[:ipaddr]
   end
 
   # Label propagation

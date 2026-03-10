@@ -1,5 +1,5 @@
 class StubHTTP
-  attr_accessor :open_timeout, :read_timeout, :verify_hostname, :hostname
+  attr_accessor :open_timeout, :read_timeout
   attr_reader :captured_request
 
   def initialize(response)
