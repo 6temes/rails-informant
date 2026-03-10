@@ -11,7 +11,7 @@ module RailsInformant
         group = ErrorGroup.find_or_create_for(Fingerprint.generate(error), attrs)
         group.detect_regression!
         store_occurrence(group, error, env:, context:) if should_store_occurrence?(group)
-        notify(group)
+        notify(group, error)
       rescue StandardError => e
         Rails.logger.error "[RailsInformant] Capture failed: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
       end
@@ -38,9 +38,14 @@ module RailsInformant
         keep_ids = group.occurrences.order(created_at: :desc).limit(MAX_OCCURRENCES_PER_GROUP).select(:id)
         Occurrence.where(error_group_id: group.id).where.not(id: keep_ids).delete_all
       end
-      def notify(group)
+      def notify(group, error)
+        return if notifier_error?(error)
         return unless RailsInformant.config.notifiers.any? { it.should_notify?(group) }
         RailsInformant::NotifyJob.perform_later group
+      end
+
+      def notifier_error?(error)
+        error.backtrace&.any? { it.include?("rails_informant/notifiers") }
       end
     end
   end
