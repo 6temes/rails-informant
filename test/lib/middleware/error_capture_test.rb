@@ -13,12 +13,12 @@ class RailsInformant::Middleware::ErrorCaptureTest < ActiveSupport::TestCase
       "Expected exception to be marked as captured"
   end
 
-  test "captures rescued exception from env" do
-    error = StandardError.new("rescued")
+  test "captures rescued exception when response is 500" do
+    error = StandardError.new("server error")
     error.set_backtrace [ "/app/foo.rb:1" ]
     app = ->(env) {
       env["rails_informant.rescued_exception"] = error
-      [ 200, {}, [ "" ] ]
+      [ 500, {}, [ "" ] ]
     }
     middleware = RailsInformant::Middleware::ErrorCapture.new(app)
 
@@ -26,6 +26,49 @@ class RailsInformant::Middleware::ErrorCaptureTest < ActiveSupport::TestCase
 
     assert error.instance_variable_get(:@__rails_informant_captured),
       "Expected exception to be marked as captured"
+  end
+
+  test "captures rescued exception when response is 503" do
+    error = StandardError.new("service unavailable")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 503, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call({})
+
+    assert error.instance_variable_get(:@__rails_informant_captured),
+      "Expected exception to be marked as captured"
+  end
+
+  test "skips rescued exception when response is 404" do
+    RailsInformant::ErrorRecorder.expects(:record).never
+
+    error = StandardError.new("not found")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 404, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call({})
+  end
+
+  test "skips rescued exception when response is 422" do
+    RailsInformant::ErrorRecorder.expects(:record).never
+
+    error = StandardError.new("unprocessable")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 422, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call({})
   end
 
   test "skips already captured exceptions" do
