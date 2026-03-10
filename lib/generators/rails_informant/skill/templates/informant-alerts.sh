@@ -32,11 +32,9 @@ unresolved=$(echo "$response" | jq -r '.unresolved_count // 0') || exit 0
 # Format error summary
 label="error"
 [[ "$unresolved" -gt 1 ]] && label="errors"
-echo "BLOCKING REQUIREMENT: You MUST mention these production errors to the user before doing anything else."
-echo ""
-echo "🚨 Informant: ${unresolved} unresolved ${label} in production"
+cat <<ALERT
+🚨 Informant: ${unresolved} unresolved ${label} in production
+$(echo "$response" | jq -r '.top_errors[]? | "  - \(.error_class) (\(.total_occurrences) \(if .total_occurrences == 1 then "occurrence" else "occurrences" end))"' 2>/dev/null || true)
 
-echo "$response" | jq -r '
-  .top_errors[]? |
-  "  - \(.error_class) (\(.total_occurrences) \(if .total_occurrences == 1 then "occurrence" else "occurrences" end))"
-' 2>/dev/null || true
+START your response by casually mentioning these errors, then ask the user if they want to investigate or continue with their request. Do NOT proceed with the user's request until they answer.
+ALERT
