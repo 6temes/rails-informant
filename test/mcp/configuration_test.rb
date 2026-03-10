@@ -75,6 +75,36 @@ module RailsInformant
           "Configuration should not expose environments publicly"
       end
 
+      def test_client_for_returns_client
+        ENV["INFORMANT_PRODUCTION_URL"] = "https://app.example.com"
+        ENV["INFORMANT_PRODUCTION_TOKEN"] = "secret"
+
+        config = Configuration.new
+        client = config.client_for("production")
+
+        assert_instance_of Client, client
+      end
+
+      def test_client_for_passes_allow_insecure
+        ENV["INFORMANT_PRODUCTION_URL"] = "http://localhost:3000"
+        ENV["INFORMANT_PRODUCTION_TOKEN"] = "secret"
+
+        config = Configuration.new(allow_insecure: true)
+        client = config.client_for("production")
+
+        assert_instance_of Client, client
+      end
+
+      def test_client_for_unknown_environment_raises
+        ENV["INFORMANT_PRODUCTION_URL"] = "https://app.example.com"
+        ENV["INFORMANT_PRODUCTION_TOKEN"] = "secret"
+
+        config = Configuration.new
+        error = assert_raises(ArgumentError) { config.client_for("unknown") }
+
+        assert_includes error.message, "Unknown environment: unknown"
+      end
+
       def test_path_prefix_from_env_var
         ENV["INFORMANT_PRODUCTION_URL"] = "https://app.example.com"
         ENV["INFORMANT_PRODUCTION_TOKEN"] = "secret"
