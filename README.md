@@ -132,16 +132,13 @@ The bundled `informant-mcp` executable connects Claude Code to your error data v
 
 The `rails_informant:skill` generator creates `.mcp.json` automatically. Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv). The MCP server inherits env vars from your shell.
 
-For multi-environment setups, create `~/.config/informant-mcp.yml`:
+For multi-environment setups, add env vars for each environment:
 
-```yaml
-environments:
-  production:
-    url: https://myapp.com
-    token: ${INFORMANT_PRODUCTION_TOKEN}
-  staging:
-    url: https://staging.myapp.com
-    token: ${INFORMANT_STAGING_TOKEN}
+```bash
+export INFORMANT_PRODUCTION_URL=https://myapp.com
+export INFORMANT_PRODUCTION_TOKEN=<token>
+export INFORMANT_STAGING_URL=https://staging.myapp.com
+export INFORMANT_STAGING_TOKEN=<token>
 ```
 
 ### Tools
