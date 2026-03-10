@@ -6,10 +6,11 @@ module RailsInformant
 
         ## Triage Workflow
         1. Check `get_informant_status` for overview counts by status
-        2. List unresolved errors with `list_errors(status: "unresolved")`
-        3. Pick the highest-impact error
-        4. Investigate with `get_error` (includes up to 10 recent occurrences)
-        5. For errors with many occurrences, use `list_occurrences` to paginate through all of them
+        2. If fix_pending count > 0 in the status response, run `verify_pending_fixes` to check deployed fixes
+        3. List unresolved errors with `list_errors(status: "unresolved")`
+        4. Pick the highest-impact error
+        5. Investigate with `get_error` (includes up to 10 recent occurrences)
+        6. For errors with many occurrences, use `list_occurrences` to paginate through all of them
 
         ## Assessment Criteria
         Prioritize by: frequency (occurrence count), impact (affects critical paths),
@@ -23,12 +24,30 @@ module RailsInformant
         duplicate → unresolved
 
         ## Resolution Strategies
-        - Clear fix available → write fix, call `mark_fix_pending` with commit SHAs
+        - Clear fix available → write fix, call `mark_fix_pending` with commit SHAs. After deploy, run `verify_pending_fixes` to confirm and resolve.
+        - Pending fixes deployed → `verify_pending_fixes` checks git ancestry and resolves verified fixes
         - Not actionable → `annotate_error` with reason, then `ignore_error`
         - Same root cause as another → `mark_duplicate` with target ID
         - Needs context → `annotate_error` with findings
         - Already fixed → `resolve_error`
         - Test data or mistakes → `delete_error` (irreversible; prefer resolve or ignore)
+
+        ## Fix Workflow
+        When implementing a fix:
+        1. Create a feature branch
+        2. Check out the deployed commit (git SHA from occurrence) to analyze code as it was
+        3. Write a failing test reproducing the error
+        4. Implement the fix
+        5. Verify test passes
+        6. Commit + open draft PR
+        7. Call `mark_fix_pending` with fix_sha, original_sha, and fix_pr_url
+
+        ## Interaction Rules
+        - Always ask the user before opening GitHub issues or creating PRs.
+        - Error occurrences include the git SHA of the deploy. Use this to check out
+          the code as it was when the error occurred.
+        - If you cannot reproduce an error (data-dependent, timing-dependent),
+          generate a diagnosis and ask the user how to proceed.
 
         ## Pagination
         List responses include: "Page X, per_page: Y, has_more: true/false".
@@ -60,7 +79,8 @@ module RailsInformant
         Tools::MarkDuplicate,
         Tools::MarkFixPending,
         Tools::ReopenError,
-        Tools::ResolveError
+        Tools::ResolveError,
+        Tools::VerifyPendingFixes
       ].freeze
 
       def self.build(config)

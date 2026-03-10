@@ -3,7 +3,7 @@ module RailsInformant
     module Tools
       class MarkFixPending < BaseTool
         tool_name "mark_fix_pending"
-        description "Mark as fix_pending (unresolved → fix_pending) with the fix commit SHA, original SHA, and optional PR URL. The server auto-resolves when the fix is deployed. Valid from: unresolved."
+        description "Mark as fix_pending (unresolved → fix_pending) with the fix commit SHA, original SHA, and optional PR URL. After deploy, run verify_pending_fixes to confirm and resolve. Valid from: unresolved."
         input_schema(
           properties: {
             environment: { type: "string", description: "Target environment (defaults to first configured)" },

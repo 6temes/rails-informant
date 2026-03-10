@@ -52,9 +52,7 @@ module RailsInformant
         request = Net::HTTP::Post.new uri, { "Content-Type" => "application/json", "Host" => uri.hostname }.merge(headers)
         request.body = body.to_json
 
-        response = Net::HTTP.start(resolved_ip, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 15, max_retries: 0) do |http|
-          http.verify_hostname = true
-          http.hostname = uri.hostname  # SNI: verify cert against hostname, connect to resolved IP
+        response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, ipaddr: resolved_ip, open_timeout: 10, read_timeout: 15, max_retries: 0) do |http|
           http.request request
         end
 

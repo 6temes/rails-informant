@@ -94,6 +94,31 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     end
   end
 
+  test "skips NotifyJob when error originates from notifier" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    error = StandardError.new("SSL error")
+    error.set_backtrace [
+      "/gems/informant/lib/rails_informant/notifiers/notification_policy.rb:55:in `post_json'",
+      "/gems/informant/lib/rails_informant/notifiers/slack.rb:7:in `notify'"
+    ]
+
+    assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+      RailsInformant::ErrorRecorder.record error
+    end
+  end
+
+  test "enqueues NotifyJob for errors not from notifier" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    error = StandardError.new("regular error")
+    error.set_backtrace [ "/app/models/user.rb:42:in `save'" ]
+
+    assert_enqueued_with job: RailsInformant::NotifyJob do
+      RailsInformant::ErrorRecorder.record error
+    end
+  end
+
   test "trim_occurrences keeps only newest MAX_OCCURRENCES_PER_GROUP records" do
     group = create_error_group total_occurrences: 30
 
