@@ -1,15 +1,18 @@
 module RailsInformant
   class Configuration
-    attr_accessor :api_token,
-                  :capture_errors,
+    attr_accessor :capture_errors,
                   :capture_user_email,
+                  :api_token,
                   :ignored_exceptions,
                   :retention_days,
                   :slack_webhook_url,
                   :webhook_url
 
+    attr_writer :app_name
+
     def initialize
       @api_token = ENV["INFORMANT_API_TOKEN"]
+      @app_name = ENV["INFORMANT_APP_NAME"]
       @capture_errors = ENV.fetch("INFORMANT_CAPTURE_ERRORS", "true") != "false"
       @capture_user_email = false
       @custom_notifiers = []
@@ -17,6 +20,10 @@ module RailsInformant
       @retention_days = ENV["INFORMANT_RETENTION_DAYS"]&.to_i
       @slack_webhook_url = ENV["INFORMANT_SLACK_WEBHOOK_URL"]
       @webhook_url = ENV["INFORMANT_WEBHOOK_URL"]
+    end
+
+    def app_name
+      @app_name.presence || detect_app_name
     end
 
     # Returns all notifiers: built-in (auto-registered from config) + custom.
@@ -35,6 +42,10 @@ module RailsInformant
     end
 
     private
+
+    def detect_app_name
+      Rails.application&.class&.module_parent_name.presence || "App"
+    end
 
     def built_in_notifiers
       [

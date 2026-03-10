@@ -17,35 +17,47 @@ module RailsInformant
       end
 
       def build_payload(error_group, occurrence)
+        {
+          text: "#{error_group.error_class}: #{error_group.message.to_s.truncate(200)}",
+          blocks: [
+            header_block(error_group, occurrence),
+            error_class_block(error_group),
+            fields_block(error_group),
+            context_block(occurrence)
+          ].compact
+        }
+      end
+
+      def header_block(error_group, occurrence)
+        env = occurrence&.environment_context&.dig("rails_env") || Rails.env
         regression_tag = regression?(error_group) ? " [REGRESSION]" : ""
+        text = "🚨 #{RailsInformant.app_name} · #{env}#{regression_tag}".truncate(150)
 
         {
-          blocks: [
-            {
-              type: "header",
-              text: {
-                type: "plain_text",
-                text: "#{error_group.error_class}#{regression_tag}",
-                emoji: true
-              }
-            },
-            {
-              type: "section",
-              fields: [
-                { type: "mrkdwn", text: "*Message:*\n#{error_group.message.to_s.truncate(200)}" },
-                { type: "mrkdwn", text: "*Status:*\n#{error_group.status}" },
-                { type: "mrkdwn", text: "*Occurrences:*\n#{error_group.total_occurrences}" },
-                { type: "mrkdwn", text: "*First seen:*\n#{error_group.first_seen_at&.iso8601}" }
-              ]
-            },
-            {
-              type: "section",
-              fields: [
-                location_field(error_group),
-                { type: "mrkdwn", text: "*Severity:*\n#{error_group.severity}" }
-              ].compact
-            },
-            context_block(occurrence)
+          type: "header",
+          text: { type: "plain_text", text:, emoji: true }
+        }
+      end
+
+      def error_class_block(error_group)
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: "*#{error_group.error_class}*\n#{error_group.message.to_s.truncate(200)}"
+          }
+        }
+      end
+
+      def fields_block(error_group)
+        {
+          type: "section",
+          fields: [
+            { type: "mrkdwn", text: "*Status:*\n#{error_group.status}" },
+            { type: "mrkdwn", text: "*Occurrences:*\n#{error_group.total_occurrences}" },
+            { type: "mrkdwn", text: "*First seen:*\n#{error_group.first_seen_at&.iso8601}" },
+            { type: "mrkdwn", text: "*Severity:*\n#{error_group.severity}" },
+            location_field(error_group)
           ].compact
         }
       end
@@ -58,19 +70,14 @@ module RailsInformant
       end
 
       def context_block(occurrence)
-        return unless occurrence
+        return unless occurrence&.git_sha
 
-        elements = []
-        if occurrence.git_sha
-          elements << { type: "mrkdwn", text: "Deploy: `#{occurrence.git_sha[0, 7]}`" }
-        end
-        if occurrence.environment_context&.dig("hostname")
-          elements << { type: "mrkdwn", text: "Host: `#{occurrence.environment_context["hostname"]}`" }
-        end
-
-        return if elements.empty?
-
-        { type: "context", elements: elements }
+        {
+          type: "context",
+          elements: [
+            { type: "mrkdwn", text: "Deploy: `#{occurrence.git_sha[0, 7]}`" }
+          ]
+        }
       end
     end
   end

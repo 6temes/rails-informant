@@ -57,7 +57,8 @@ module RailsInformant
   self.config = Configuration.new
 
   class << self
-    delegate :api_token,
+    delegate :app_name,
+             :api_token,
              :capture_errors,
              :capture_user_email,
              :ignored_exceptions,
