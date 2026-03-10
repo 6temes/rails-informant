@@ -6,6 +6,7 @@
 /test/dummy/db/*.sqlite3-*
 /test/dummy/log/
 /test/dummy/tmp/
+/test/tmp/
 *.gem
 Gemfile.lock
 .byebug_history

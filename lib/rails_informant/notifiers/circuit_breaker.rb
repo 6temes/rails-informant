@@ -22,19 +22,20 @@ module RailsInformant
         end
 
         def record_success
-          MUTEX.synchronize { _reset! }
+          MUTEX.synchronize do
+            @failure_count = 0
+            @last_failure_at = nil
+          end
         end
 
         def reset!
-          MUTEX.synchronize { _reset! }
+          MUTEX.synchronize do
+            @failure_count = 0
+            @last_failure_at = nil
+          end
         end
 
         private
-
-        def _reset!
-          @failure_count = 0
-          @last_failure_at = nil
-        end
 
         def failure_count
           @failure_count || 0
