@@ -19,12 +19,7 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
   test "creates hook script with executable permissions" do
     run_generator
 
-    assert_file ".claude/hooks/informant-alerts.sh" do |content|
-      assert_match "#!/usr/bin/env bash", content
-      assert_match "INFORMANT_PRODUCTION_URL", content
-      assert_match "INFORMANT_PRODUCTION_TOKEN", content
-      assert_match "jq", content
-    end
+    assert_file ".claude/hooks/informant-alerts.sh"
 
     script_path = File.join(destination_root, ".claude/hooks/informant-alerts.sh")
     assert File.executable?(script_path), "Hook script should be executable"

@@ -6,9 +6,10 @@
 
 set -euo pipefail
 
-# Silent exit if env vars are missing
+# Silent exit if env vars are missing or URL is not HTTPS
 [[ -z "${INFORMANT_PRODUCTION_URL:-}" ]] && exit 0
 [[ -z "${INFORMANT_PRODUCTION_TOKEN:-}" ]] && exit 0
+[[ "$INFORMANT_PRODUCTION_URL" == https://* ]] || exit 0
 
 # Silent exit if jq is not installed
 command -v jq >/dev/null 2>&1 || exit 0
@@ -20,8 +21,9 @@ url="${INFORMANT_PRODUCTION_URL}${path_prefix}/api/v1/status"
 response=$(curl -s -f \
   --connect-timeout 3 \
   --max-time 5 \
-  -H "Authorization: Bearer ${INFORMANT_PRODUCTION_TOKEN}" \
-  "$url" 2>/dev/null) || exit 0
+  -H @- \
+  "$url" <<< "Authorization: Bearer ${INFORMANT_PRODUCTION_TOKEN}" \
+  2>/dev/null) || exit 0
 
 # Parse unresolved count
 unresolved=$(echo "$response" | jq -r '.unresolved_count // 0') || exit 0
@@ -30,9 +32,7 @@ unresolved=$(echo "$response" | jq -r '.unresolved_count // 0') || exit 0
 # Format error summary
 label="error"
 [[ "$unresolved" -gt 1 ]] && label="errors"
-count=$(printf "%'d" "$unresolved" 2>/dev/null || echo "$unresolved")
-
-echo "🚨 Informant: ${count} unresolved ${label} in production"
+echo "🚨 Informant: ${unresolved} unresolved ${label} in production"
 
 echo "$response" | jq -r '
   .top_errors[]? |

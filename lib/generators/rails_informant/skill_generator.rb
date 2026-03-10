@@ -77,6 +77,7 @@ module RailsInformant
       say "The token must match rails_informant.api_token in your Rails credentials."
       say "Add .envrc to .gitignore — it contains secrets."
       say ""
+      say "Optional: install jq for startup error alerts (brew install jq)", :cyan
     end
 
     private
