@@ -31,11 +31,12 @@ class RailsInformant::ContextFilterTest < ActiveSupport::TestCase
     assert_nil RailsInformant::ContextFilter.filter_message(nil)
   end
 
-  test "skips JSON serialization for small hashes" do
-    small = { user_id: 1, action: "show", ip: "127.0.0.1" }
+  test "truncates small hash with large values exceeding size limit" do
+    large_value = "x" * (16 * 1024) # 16 KB each
+    small = 5.times.to_h { |i| [ :"k#{i}", large_value ] }
     result = RailsInformant::ContextFilter.filter(small)
-    assert_equal 1, result[:user_id]
-    assert_equal "show", result[:action]
+    assert result[:_truncated]
+    assert result[:_original_size] > 64.kilobytes
   end
 
   test "truncates oversized context" do

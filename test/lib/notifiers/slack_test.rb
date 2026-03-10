@@ -195,6 +195,20 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_not_includes texts, "Host:"
   end
 
+  test "payload renders without error when message is nil" do
+    group = create_error_group(message: nil)
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    payload = JSON.parse(stub_http.captured_request.body)
+    assert_includes payload["text"], group.error_class
+    error_block = payload["blocks"][1]
+    assert_includes error_block.dig("text", "text"), group.error_class
+  end
+
   test "header truncates to 150 characters" do
     RailsInformant.config.app_name = "A" * 200
 

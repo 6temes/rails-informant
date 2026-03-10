@@ -18,7 +18,7 @@ module RailsInformant
 
       def build_payload(error_group, occurrence)
         {
-          text: "#{error_group.error_class}: #{error_group.message.to_s.truncate(200)}",
+          text: "#{error_group.error_class}: #{error_group.message&.truncate(200)}",
           blocks: [
             header_block(error_group, occurrence),
             error_class_block(error_group),
@@ -44,7 +44,7 @@ module RailsInformant
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "*#{error_group.error_class}*\n#{error_group.message.to_s.truncate(200)}"
+            text: "*#{error_group.error_class}*\n#{error_group.message&.truncate(200)}"
           }
         }
       end
