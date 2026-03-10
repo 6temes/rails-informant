@@ -38,3 +38,6 @@ echo "$response" | jq -r '
   .top_errors[]? |
   "  - \(.error_class) (\(.total_occurrences) \(if .total_occurrences == 1 then "occurrence" else "occurrences" end))"
 ' 2>/dev/null || true
+
+echo ""
+echo "IMPORTANT: Before responding to the user's request, briefly mention these unresolved production errors so they are aware."
