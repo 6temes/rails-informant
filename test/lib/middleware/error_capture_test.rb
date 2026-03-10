@@ -42,6 +42,21 @@ class RailsInformant::Middleware::ErrorCaptureTest < ActiveSupport::TestCase
     middleware.call({})
   end
 
+  test "skips ignored exceptions even when response is 500" do
+    RailsInformant::ErrorRecorder.expects(:record).never
+    RailsInformant.stubs(:ignored_exception?).returns(true)
+
+    error = StandardError.new("ignored")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 500, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call({})
+  end
+
   test "skips already captured exceptions" do
     RailsInformant::ErrorRecorder.expects(:record).never
 
