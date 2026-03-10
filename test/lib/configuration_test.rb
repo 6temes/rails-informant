@@ -111,6 +111,40 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     ENV.delete("INFORMANT_IGNORED_EXCEPTIONS")
   end
 
+  test "app_name returns ENV value when set" do
+    ENV["INFORMANT_APP_NAME"] = "EnvApp"
+    config = RailsInformant::Configuration.new
+    assert_equal "EnvApp", config.app_name
+  ensure
+    ENV.delete("INFORMANT_APP_NAME")
+  end
+
+  test "app_name returns explicit config over ENV" do
+    ENV["INFORMANT_APP_NAME"] = "EnvApp"
+    config = RailsInformant::Configuration.new
+    config.app_name = "ExplicitApp"
+    assert_equal "ExplicitApp", config.app_name
+  ensure
+    ENV.delete("INFORMANT_APP_NAME")
+  end
+
+  test "app_name auto-detects from Rails.application" do
+    config = RailsInformant::Configuration.new
+    assert_equal "Dummy", config.app_name
+  end
+
+  test "app_name falls back to App when Rails.application is nil" do
+    Rails.stubs(:application).returns(nil)
+    config = RailsInformant::Configuration.new
+    assert_equal "App", config.app_name
+  end
+
+  test "app_name treats empty string as unset" do
+    config = RailsInformant::Configuration.new
+    config.app_name = ""
+    assert_equal "Dummy", config.app_name
+  end
+
   test "custom notifiers survive config reset" do
     RailsInformant.config.slack_webhook_url = nil
     RailsInformant.config.webhook_url = nil

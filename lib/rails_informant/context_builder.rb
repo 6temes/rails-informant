@@ -50,13 +50,21 @@ module RailsInformant
       end
 
       def build_environment_context
-        @_static_env ||= {
-          rails_env: Rails.env.to_s,
-          ruby_version: RUBY_VERSION,
-          rails_version: Rails::VERSION::STRING,
-          hostname: Socket.gethostname
-        }.freeze
+        @_static_env ||= begin
+          hostname = Socket.gethostname
+          env = {
+            rails_env: Rails.env.to_s,
+            ruby_version: RUBY_VERSION,
+            rails_version: Rails::VERSION::STRING
+          }
+          env[:hostname] = hostname unless hostname == "localhost"
+          env.freeze
+        end
         @_static_env.merge(pid: Process.pid)
+      end
+
+      def reset!
+        @_static_env = nil
       end
 
       def group_attributes(error, severity:, context:, env:, now:)

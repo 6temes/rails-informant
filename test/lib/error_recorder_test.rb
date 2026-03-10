@@ -172,14 +172,30 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
   end
 
   test "stores environment context" do
+    RailsInformant::ContextBuilder.reset!
+    Socket.stubs(:gethostname).returns("web-01.prod")
     RailsInformant::ErrorRecorder.record build_error
 
     occurrence = RailsInformant::Occurrence.last
     env_ctx = occurrence.environment_context
     assert_equal Rails.env.to_s, env_ctx["rails_env"]
     assert_equal RUBY_VERSION, env_ctx["ruby_version"]
-    assert env_ctx["hostname"].present?
+    assert_equal "web-01.prod", env_ctx["hostname"]
     assert env_ctx["pid"].is_a?(Integer)
+  ensure
+    RailsInformant::ContextBuilder.reset!
+  end
+
+  test "environment context omits hostname when localhost" do
+    RailsInformant::ContextBuilder.reset!
+    Socket.stubs(:gethostname).returns("localhost")
+    RailsInformant::ErrorRecorder.record build_error
+
+    occurrence = RailsInformant::Occurrence.last
+    env_ctx = occurrence.environment_context
+    assert_nil env_ctx["hostname"]
+  ensure
+    RailsInformant::ContextBuilder.reset!
   end
 
   private

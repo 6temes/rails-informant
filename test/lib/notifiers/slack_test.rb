@@ -6,6 +6,7 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
   setup do
     @notifier = RailsInformant::Notifiers::Slack.new
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    RailsInformant.config.app_name = "TestApp"
   end
 
   test "should_notify? returns true for first occurrence" do
@@ -53,7 +54,7 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_nothing_raised { @notifier.notify(group, occurrence) }
   end
 
-  test "payload includes Block Kit structure" do
+  test "payload includes Block Kit structure with branded header" do
     group = create_error_group
     occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
 
@@ -64,6 +65,34 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     payload = JSON.parse(stub_http.captured_request.body)
     assert payload["blocks"].is_a?(Array)
     assert_equal "header", payload["blocks"].first["type"]
+    assert_includes payload["blocks"].first.dig("text", "text"), "TestApp"
+    assert_includes payload["blocks"].first.dig("text", "text"), "test"
+  end
+
+  test "payload includes fallback text field" do
+    group = create_error_group
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    payload = JSON.parse(stub_http.captured_request.body)
+    assert_includes payload["text"], group.error_class
+  end
+
+  test "payload includes error class section" do
+    group = create_error_group
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    payload = JSON.parse(stub_http.captured_request.body)
+    error_block = payload["blocks"][1]
+    assert_equal "section", error_block["type"]
+    assert_includes error_block.dig("text", "text"), group.error_class
   end
 
   test "raises on non-HTTPS URL" do
@@ -88,7 +117,7 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_not RailsInformant::Notifiers::Slack.private_method_defined?(:truncate)
   end
 
-  test "payload includes REGRESSION tag when previously resolved error reoccurs" do
+  test "payload includes REGRESSION tag in header when previously resolved error reoccurs" do
     group = create_error_group(status: "unresolved")
     group.update_columns fix_deployed_at: 1.day.ago
     occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
@@ -100,6 +129,7 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     payload = JSON.parse(stub_http.captured_request.body)
     header_text = payload["blocks"].first.dig("text", "text")
     assert_includes header_text, "[REGRESSION]"
+    assert_includes header_text, "TestApp"
   end
 
   test "payload omits REGRESSION tag for normal errors" do
@@ -124,8 +154,8 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     @notifier.notify(group, occurrence)
 
     payload = JSON.parse(stub_http.captured_request.body)
-    fields = payload["blocks"][2]["fields"]
-    location = fields.find { it["text"].include?("Location") }
+    fields_block = payload["blocks"][2]
+    location = fields_block["fields"].find { it["text"].include?("Location") }
     assert_includes location["text"], "users#show"
   end
 
@@ -145,5 +175,38 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_not_nil context_block
     deploy_element = context_block["elements"].find { it["text"].include?("Deploy") }
     assert_includes deploy_element["text"], "abc1234"
+  end
+
+  test "context block omits hostname" do
+    group = create_error_group
+    occurrence = group.occurrences.create!(
+      backtrace: [ "/app/foo.rb:1" ],
+      git_sha: "abc1234",
+      environment_context: { "hostname" => "web-01.prod" }
+    )
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    payload = JSON.parse(stub_http.captured_request.body)
+    context_block = payload["blocks"].find { it["type"] == "context" }
+    texts = context_block["elements"].map { it["text"] }.join
+    assert_not_includes texts, "Host:"
+  end
+
+  test "header truncates to 150 characters" do
+    RailsInformant.config.app_name = "A" * 200
+
+    group = create_error_group
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    payload = JSON.parse(stub_http.captured_request.body)
+    header_text = payload["blocks"].first.dig("text", "text")
+    assert header_text.length <= 150
   end
 end
