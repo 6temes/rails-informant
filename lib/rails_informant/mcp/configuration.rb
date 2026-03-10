@@ -25,7 +25,7 @@ module RailsInformant
         env = @environments[name]
         raise ArgumentError, "Unknown environment: #{name}. Available: #{environment_names.join(', ')}" unless env
 
-        @clients[name] ||= Client.new(url: env[:url], token: env[:token], allow_insecure:, path_prefix: env[:path_prefix] || "/informant")
+        @clients[name] ||= Client.new(url: env[:url], token: env[:token], allow_insecure: @allow_insecure, path_prefix: env[:path_prefix] || "/informant")
       end
 
       private
