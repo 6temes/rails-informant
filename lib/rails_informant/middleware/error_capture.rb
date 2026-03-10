@@ -6,9 +6,11 @@ module RailsInformant
       end
 
       def call(env)
-        @app.call(env).tap do
-          if (exception = env["rails_informant.rescued_exception"])
-            record_exception(exception, env: env)
+        @app.call(env).tap do |status, _headers, _body|
+          # Only record rescued exceptions that resulted in a server error.
+          # 4xx responses are expected application errors handled by ShowExceptions.
+          if (exception = env["rails_informant.rescued_exception"]) && status.to_i >= 500
+            record_exception exception, env:
           end
         end
       rescue StandardError => exception
