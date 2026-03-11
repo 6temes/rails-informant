@@ -17,9 +17,10 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
     @subscriber.report error, handled: true, severity: :error, context: {}
   end
 
-  test "skips handled error with warning severity" do
-    RailsInformant::ErrorRecorder.expects(:record).never
-    @subscriber.report build_error, handled: true, severity: :warning, context: {}
+  test "captures handled error with warning severity" do
+    error = build_error
+    RailsInformant::ErrorRecorder.expects(:record).with(error, severity: "warning", context: {}, source: nil)
+    @subscriber.report error, handled: true, severity: :warning, context: {}
   end
 
   test "skips handled error with info severity" do

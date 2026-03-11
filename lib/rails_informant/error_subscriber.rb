@@ -4,7 +4,7 @@ module RailsInformant
 
     def report(error, handled:, severity:, context:, source: nil)
       return unless RailsInformant.initialized?
-      return if handled && severity != :error
+      return if handled && severity == :info
       return if source && SKIP_SOURCES.match?(source)
       return if RailsInformant.ignored_exception?(error)
       return if RailsInformant.already_captured?(error)
