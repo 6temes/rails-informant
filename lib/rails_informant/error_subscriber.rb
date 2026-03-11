@@ -11,7 +11,7 @@ module RailsInformant
 
       RailsInformant.mark_captured!(error)
 
-      ErrorRecorder.record error, severity:, context:, source:
+      ErrorRecorder.record error, severity: severity.to_s, context:, source:
     end
   end
 end
