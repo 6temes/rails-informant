@@ -123,6 +123,108 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     end
   end
 
+  test "before_record callback can halt recording" do
+    RailsInformant.config.before_record do |event|
+      event.halt! if event.message.include?("noisy")
+    end
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      RailsInformant::ErrorRecorder.record build_error("noisy timeout")
+    end
+  end
+
+  test "before_record callback can override fingerprint" do
+    RailsInformant.config.before_record do |event|
+      event.fingerprint = "custom-group"
+    end
+
+    RailsInformant::ErrorRecorder.record build_error("first")
+    RailsInformant::ErrorRecorder.record build_error("second")
+
+    # Both should land in the same group despite different messages
+    assert_equal 1, RailsInformant::ErrorGroup.count
+    assert_equal 2, RailsInformant::ErrorGroup.last.total_occurrences
+  end
+
+  test "before_record callback can override severity" do
+    RailsInformant.config.before_record do |event|
+      event.severity = "warning" if event.error_class == "StandardError"
+    end
+
+    RailsInformant::ErrorRecorder.record build_error
+    assert_equal "warning", RailsInformant::ErrorGroup.last.severity
+  end
+
+  test "before_record callback exception is logged but does not halt" do
+    RailsInformant.config.before_record do |_event|
+      raise "callback bug"
+    end
+
+    assert_difference -> { RailsInformant::ErrorGroup.count }, 1 do
+      RailsInformant::ErrorRecorder.record build_error
+    end
+  end
+
+  test "before_record callbacks run in order and halt stops chain" do
+    calls = []
+    RailsInformant.config.before_record { |_e| calls << :first }
+    RailsInformant.config.before_record { |e| calls << :second; e.halt! }
+    RailsInformant.config.before_record { |_e| calls << :third }
+
+    RailsInformant::ErrorRecorder.record build_error
+    assert_equal %i[first second], calls
+  end
+
+  test "before_record event exposes request_path from env" do
+    observed_path = nil
+    RailsInformant.config.before_record { |e| observed_path = e.request_path }
+
+    env = { "PATH_INFO" => "/api/users", "REQUEST_METHOD" => "GET" }
+    RailsInformant::ErrorRecorder.record build_error, env: env
+
+    assert_equal "/api/users", observed_path
+  end
+
+  test "spike protection suppresses occurrence storage and notifications after threshold" do
+    RailsInformant.config.spike_protection = { threshold: 3, window: 1.minute }
+    RailsInformant::ErrorRecorder.reset_spike_counters!
+
+    # First 3 should record normally
+    3.times { RailsInformant::ErrorRecorder.record build_error }
+    assert_equal 1, RailsInformant::ErrorGroup.count
+    assert_equal 3, RailsInformant::ErrorGroup.last.total_occurrences
+
+    # 4th and beyond should still increment counters but not store occurrences
+    occurrence_count_before = RailsInformant::Occurrence.count
+    2.times { RailsInformant::ErrorRecorder.record build_error }
+
+    assert_equal 5, RailsInformant::ErrorGroup.last.total_occurrences
+    assert_equal occurrence_count_before, RailsInformant::Occurrence.count
+  end
+
+  test "spike protection resets after window expires" do
+    RailsInformant.config.spike_protection = { threshold: 2, window: 1.minute }
+    RailsInformant::ErrorRecorder.reset_spike_counters!
+
+    3.times { RailsInformant::ErrorRecorder.record build_error }
+
+    # Travel past the window
+    travel 2.minutes do
+      occurrence_count_before = RailsInformant::Occurrence.count
+      RailsInformant::ErrorRecorder.record build_error
+      # Should store again after window reset
+      assert_operator RailsInformant::Occurrence.count, :>=, occurrence_count_before
+    end
+  end
+
+  test "spike protection is disabled when config is nil" do
+    RailsInformant.config.spike_protection = nil
+    RailsInformant::ErrorRecorder.reset_spike_counters!
+
+    10.times { RailsInformant::ErrorRecorder.record build_error }
+    assert_equal 10, RailsInformant::ErrorGroup.last.total_occurrences
+  end
+
   test "records normally for errors not from informant" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
 

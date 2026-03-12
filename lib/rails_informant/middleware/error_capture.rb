@@ -21,6 +21,8 @@ module RailsInformant
       private
 
       def record_exception(exception, env:)
+        return if RailsInformant::Current.silenced
+        return if RailsInformant.ignored_path?(env)
         return if RailsInformant.ignored_exception?(exception)
         return if RailsInformant.already_captured?(exception)
         RailsInformant.mark_captured!(exception)

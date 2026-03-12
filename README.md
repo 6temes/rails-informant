@@ -11,13 +11,11 @@
   </div>
 
   <p>
-    <a href="#why-rails-informant">Why Rails Informant?</a>
-    &#9670; <a href="#quick-start">Quick Start</a>
+    <a href="#quick-start">Quick Start</a>
     &#9670; <a href="#configuration">Configuration</a>
+    &#9670; <a href="#noise-suppression">Noise Suppression</a>
     &#9670; <a href="#mcp-server">MCP Server</a>
-    &#9670; <a href="#architecture">Architecture</a>
     &#9670; <a href="#data-and-privacy">Data and Privacy</a>
-    &#9670; <a href="#security">Security</a>
   </p>
 </div>
 
@@ -27,12 +25,10 @@ Captures exceptions, stores them in your app's database with rich context (backt
 
 No dashboard. The agent *is* the interface.
 
-## Why Rails Informant?
-
-- **Agent-native** -- 12 MCP tools let AI agents list, inspect, resolve, and fix errors without a browser. The `/informant` Claude Code skill provides a complete triage-to-fix workflow.
-- **Self-hosted** -- Errors stay in your database. No external service, no data leaving your infrastructure (unless you configure Slack or webhook notifications).
-- **Zero-config capture** -- Errors captured automatically via `Rails.error` subscriber and Rack middleware. Breadcrumbs from `ActiveSupport::Notifications` provide structured debugging context.
-- **Lightweight** -- Two database tables, no Redis, no background workers beyond ActiveJob. Runtime dependencies: Rails 8.1+ only.
+- **Agent-native** -- 14 MCP tools let AI agents list, inspect, resolve, and fix errors without a browser.
+- **Self-hosted** -- Errors stay in your database. No external service, no data leaving your infrastructure.
+- **Zero-config capture** -- Automatic via `Rails.error` subscriber and Rack middleware. Breadcrumbs from `ActiveSupport::Notifications` provide structured debugging context.
+- **Lightweight** -- Two database tables, no Redis, no background workers beyond ActiveJob.
 
 ## Quick Start
 
@@ -67,7 +63,7 @@ Install Claude Code integration:
 bin/rails generate rails_informant:skill
 ```
 
-Errors are captured automatically in non-local environments. To capture errors manually:
+Errors are captured automatically. To capture manually:
 
 ```ruby
 RailsInformant.capture(exception, context: { order_id: 42 })
@@ -85,52 +81,81 @@ RailsInformant.configure do |config|
 end
 ```
 
-Every option can be set via an environment variable. The initializer takes precedence over env vars. These configure the **Rails app**. For MCP server env vars (agent side), see [MCP Server > Setup](#setup).
+Every option can be set via an environment variable. The initializer takes precedence.
 
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
-| `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for MCP server access |
-| `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture (set to `"false"` to disable) |
-| `ignored_exceptions` | `INFORMANT_IGNORED_EXCEPTIONS` | `[]` | Exception classes to skip (comma-separated in env var) |
+| `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for API/MCP access |
+| `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture |
+| `capture_user_email` | _(none)_ | `false` | Capture email from detected user (PII -- opt-in) |
+| `ignored_exceptions` | `INFORMANT_IGNORED_EXCEPTIONS` | `[]` | Exception classes to skip (walks cause chain) |
+| `ignored_paths` | `INFORMANT_IGNORED_PATHS` | `[]` | Request paths to skip (exact or segment match) |
+| `job_attempt_threshold` | `INFORMANT_JOB_ATTEMPT_THRESHOLD` | `nil` | Suppress job errors until Nth retry |
 | `retention_days` | `INFORMANT_RETENTION_DAYS` | `nil` | Auto-purge resolved errors after N days |
 | `slack_webhook_url` | `INFORMANT_SLACK_WEBHOOK_URL` | `nil` | Slack incoming webhook URL |
-| `capture_user_email` | _(none)_ | `false` | Capture email from detected user (PII -- opt-in) |
+| `spike_protection` | _(none)_ | `nil` | Rate-limit per error group: `{ threshold: 50, window: 1.minute }` |
 | `webhook_url` | `INFORMANT_WEBHOOK_URL` | `nil` | Generic webhook URL for notifications |
 
 > **Connecting the tokens:** The `api_token` in your Rails credentials and `INFORMANT_PRODUCTION_TOKEN` must be the **same value**. The first authenticates incoming requests to your app; the second tells the MCP server what token to send.
 
-> **Secrets hygiene:** `.envrc` contains secrets and should be in `.gitignore`. `.mcp.json` is safe to commit -- it only contains the command name, no tokens.
+## Noise Suppression
 
-## Error Capture
-
-Errors are captured automatically via:
-
-1. **`Rails.error` subscriber** -- background jobs, mailer errors, `Rails.error.handle` blocks
-2. **Rack middleware** -- unhandled request exceptions and rescued framework exceptions
-
-### Fingerprinting
-
-Errors are grouped by `SHA256(class_name:first_app_backtrace_frame)`. Line numbers are normalized so the same error at different lines groups together.
-
-### Ignored Exceptions
-
-Common framework exceptions (404s, CSRF, etc.) are ignored by default. Add more:
+### Silenced Blocks
 
 ```ruby
-config.ignored_exceptions = ["MyApp::BoringError", /Stripe::/]
+RailsInformant.silence do
+  risky_operation_you_dont_care_about
+end
 ```
 
-### Breadcrumbs
+Thread-safe via `CurrentAttributes`. Nesting is supported.
 
-Structured events from `ActiveSupport::Notifications` are captured automatically as breadcrumbs -- SQL query names, cache hits, template renders, HTTP calls, job executions. Stored per-occurrence for rich debugging context without raw log lines.
+### Before Record Callbacks
+
+Hook into the recording pipeline to filter, modify fingerprints, or override severity:
+
+```ruby
+config.before_record do |event|
+  event.halt! if event.message.include?("timeout")
+  event.fingerprint = "stripe-errors" if event.error_class.start_with?("Stripe::")
+  event.severity = "warning" if event.error_class == "Net::ReadTimeout"
+end
+```
+
+The `event` exposes: `error`, `error_class`, `message`, `severity`, `controller_action`, `job_class`, `request_path`, `fingerprint`. Callbacks that raise are logged and skipped.
+
+### Custom Exception Context
+
+Exceptions implementing `to_informant_context` have their context merged into occurrences automatically:
+
+```ruby
+class PaymentError < StandardError
+  def to_informant_context
+    { payment_id:, gateway: }
+  end
+end
+```
+
+### Deploy Auto-Resolve
+
+Notify Informant of a deploy to auto-resolve stale errors (not seen in the last hour):
+
+```sh
+curl -X POST https://myapp.com/informant/api/v1/deploy \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sha": "abc1234"}'
+```
+
+Resolved errors automatically reopen on regression. Also available as the `notify_deploy` MCP tool.
 
 ## MCP Server
 
-The bundled `informant-mcp` executable connects Claude Code to your error data via [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
+The bundled `informant-mcp` executable connects Claude Code to your error data via [Model Context Protocol](https://modelcontextprotocol.io).
 
 ### Setup
 
-The `rails_informant:skill` generator creates `.mcp.json` automatically. Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv). The MCP server inherits env vars from your shell.
+The `rails_informant:skill` generator creates `.mcp.json` automatically. Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv).
 
 For multi-environment setups, add env vars for each environment:
 
@@ -145,22 +170,24 @@ export INFORMANT_STAGING_TOKEN=<token>
 
 | Tool | Description |
 |------|-------------|
+| `annotate_error` | Add investigation notes |
+| `delete_error` | Delete group and occurrences |
+| `get_error` | Full error detail with recent occurrences |
+| `get_informant_status` | Summary with counts and top errors |
+| `ignore_error` | Mark as ignored |
 | `list_environments` | List configured environments |
 | `list_errors` | List error groups with filtering and pagination |
-| `get_error` | Full error detail with recent occurrences |
-| `resolve_error` | Mark as resolved |
-| `ignore_error` | Mark as ignored |
-| `reopen_error` | Reopen a resolved/ignored error |
-| `mark_fix_pending` | Mark with fix SHA for auto-resolve on deploy |
-| `mark_duplicate` | Mark as duplicate of another group |
-| `delete_error` | Delete group and occurrences |
-| `annotate_error` | Add investigation notes |
-| `get_informant_status` | Summary with counts and top errors |
 | `list_occurrences` | List occurrences with filtering |
+| `mark_duplicate` | Mark as duplicate of another group |
+| `mark_fix_pending` | Mark with fix SHA for auto-resolve on deploy |
+| `notify_deploy` | Notify of a deploy to auto-resolve stale errors |
+| `reopen_error` | Reopen a resolved/ignored error |
+| `resolve_error` | Mark as resolved |
+| `verify_pending_fixes` | Check deployed fixes and auto-resolve verified ones |
 
 ### Local Development
 
-The MCP server enforces HTTPS by default. When pointing at a local HTTP URL (e.g., `http://localhost:3000`), pass `--allow-insecure`:
+The MCP server enforces HTTPS by default. For local HTTP URLs, pass `--allow-insecure`:
 
 ```json
 {
@@ -172,18 +199,6 @@ The MCP server enforces HTTPS by default. When pointing at a local HTTP URL (e.g
   }
 }
 ```
-
-This is only needed for local development/testing. Production setups over HTTPS don't need it.
-
-## Claude Code Skill
-
-Use `/informant` in Claude Code to triage and fix errors interactively. The skill:
-
-1. Checks error status with `get_informant_status`
-2. Lists unresolved errors
-3. Investigates with full occurrence data
-4. Implements fixes with test-first workflow
-5. Marks `fix_pending` for auto-resolution on deploy
 
 ## Architecture
 
@@ -198,25 +213,6 @@ Development Machine                    Remote Servers
 |  (exe/informant-mcp)  |              |  Staging              |
 |                       |              |  /informant           |
 +-----------------------+              +-----------------------+
-
-Inside the Rails app:
-+-------------------------------------------------+
-|  Rails.error subscriber (primary capture)       |
-|  Rack Middleware (safety net)                    |
-|    - ErrorCapture (before ShowExceptions)        |
-|    - RescuedExceptionInterceptor (after Debug)   |
-|  |                                              |
-|  v                                              |
-|  Fingerprint + Upsert (atomic counter)          |
-|  |                                              |
-|  v                                              |
-|  Occurrence.create (with breadcrumbs, context)  |
-|  |                                              |
-|  v                                              |
-|  NotifyJob.perform_later (async dispatch)       |
-|    - Slack (Block Kit, Net::HTTP)               |
-|    - Webhook (PII stripped by default)          |
-+-------------------------------------------------+
 ```
 
 ### Error Group Lifecycle
@@ -227,68 +223,27 @@ unresolved --> resolved (manual)
 unresolved --> ignored
 unresolved --> duplicate
 resolved    --> unresolved [REGRESSION]
-fix_pending --> unresolved (reopen)
-ignored     --> unresolved (reopen)
-duplicate   --> unresolved (reopen)
-```
-
-## Deploy Detection
-
-On boot, the engine checks if `fix_pending` errors have been deployed by comparing the current git SHA against `original_sha`. Deployed fixes are automatically transitioned to `resolved`.
-
-Git SHA is resolved from environment variables (`GIT_SHA`, `REVISION`, `KAMAL_VERSION`) or `.git/HEAD`.
-
-## Rake Tasks
-
-```sh
-bin/rails informant:stats    # Show error monitoring statistics
-bin/rails informant:purge    # Purge resolved errors older than retention_days
 ```
 
 ## Data and Privacy
 
-Each occurrence stores the following PII:
-
-- **User email** -- only captured when `config.capture_user_email = true` and the user model responds to `#email`
-- **IP address** -- from `request.remote_ip`
-- **Custom user context** -- anything set via `RailsInformant::Current.user_context`
-
-For GDPR compliance, only include identifiers needed for debugging (e.g., user ID) rather than personal data. You can override automatic user detection by setting user context explicitly:
+Occurrences store: user ID (always), email (opt-in via `capture_user_email`), IP address, and custom context. All context passes through `ActiveSupport::ParameterFilter` -- add keys to `filter_parameters` to suppress them.
 
 ```ruby
-# In a before_action or around_action
 RailsInformant::Current.user_context = { id: current_user.id }
 ```
 
-All stored context passes through `ActiveSupport::ParameterFilter`, so adding keys to `filter_parameters` suppresses them:
-
-```ruby
-# config/application.rb
-config.filter_parameters += [:email]
-```
-
-This replaces email values with `[FILTERED]` in occurrence data. IP addresses can be suppressed the same way by adding `:ip`.
-
 ## Security
 
-- MCP server requires token authentication (`secure_compare`)
-- All stored context is filtered through `ActiveSupport::ParameterFilter`
-- MCP server enforces HTTPS by default
+- Token authentication (`secure_compare`), HTTPS enforced by default
+- All context filtered through `ActiveSupport::ParameterFilter`
 - Security headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
 - Error capture never breaks the host application
-- Webhook payloads strip PII by default
-- **Rate limiting** -- the engine does not include built-in rate limiting. Add rate limiting on the `/informant/` prefix in production, for example with [Rack::Attack](https://github.com/rack/rack-attack):
-
-```ruby
-# config/initializers/rack_attack.rb
-Rack::Attack.throttle("informant", limit: 60, period: 1.minute) do |req|
-  req.ip if req.path.start_with?("/informant/")
-end
-```
+- No built-in rate limiting -- use [Rack::Attack](https://github.com/rack/rack-attack) on `/informant/`
 
 ## License
 
-This project is licensed under the **MIT License** -- see the [LICENSE](LICENSE) file for details.
+MIT License -- see [LICENSE](LICENSE).
 
 ---
 

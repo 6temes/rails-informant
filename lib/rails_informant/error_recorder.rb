@@ -3,15 +3,33 @@ module RailsInformant
     MAX_OCCURRENCES_PER_GROUP = 25
     OCCURRENCE_COOLDOWN = 5 # seconds
 
+    @_spike_counters = {}
+    @_spike_mutex = Mutex.new
+
     class << self
+      def reset_spike_counters!
+        @_spike_counters.clear
+      end
+
       def record(error, severity: "error", context: {}, source: nil, env: nil)
         return unless RailsInformant.initialized?
         return if self_caused_error?(error)
 
         now = Time.current
         attrs = ContextBuilder.group_attributes(error, severity:, context:, env:, now:)
-        group = ErrorGroup.find_or_create_for(Fingerprint.generate(error), attrs)
+        fingerprint = Fingerprint.generate(error)
+
+        event = run_before_record_callbacks(error, attrs, env:, fingerprint:)
+        return if event.halted?
+
+        fingerprint = event.fingerprint
+        attrs[:severity] = event.severity if %w[error warning info].include?(event.severity)
+
+        group = ErrorGroup.find_or_create_for(fingerprint, attrs)
         group.detect_regression!
+
+        return if spike_limit_exceeded?(group)
+
         store_occurrence(group, error, env:, context:) if should_store_occurrence?(group)
         notify(group)
       rescue StandardError => e
@@ -19,6 +37,49 @@ module RailsInformant
       end
 
       private
+
+      def run_before_record_callbacks(error, attrs, env:, fingerprint:)
+        event = Event.new(error, attrs, env:, fingerprint:)
+        callbacks = RailsInformant.config.before_record_callbacks
+
+        callbacks.each do |callback|
+          callback.call(event)
+          break if event.halted?
+        rescue StandardError => e
+          Rails.logger.error "[RailsInformant] before_record callback failed: #{e.class}: #{e.message}"
+        end
+
+        event
+      end
+
+      MAX_SPIKE_ENTRIES = 1_000
+
+      def spike_limit_exceeded?(group)
+        config = RailsInformant.config.spike_protection
+        return false unless config
+
+        threshold, window = config.values_at(:threshold, :window)
+
+        @_spike_mutex.synchronize do
+          prune_spike_counters!(window) if @_spike_counters.size > MAX_SPIKE_ENTRIES
+
+          entry = @_spike_counters[group.id] ||= { count: 0, window_start: Time.current }
+
+          if entry[:window_start] < window.ago
+            entry[:count] = 1
+            entry[:window_start] = Time.current
+            false
+          else
+            entry[:count] += 1
+            entry[:count] > threshold
+          end
+        end
+      end
+
+      def prune_spike_counters!(window)
+        cutoff = window.ago
+        @_spike_counters.reject! { |_, v| v[:window_start] < cutoff }
+      end
 
       # Detect errors caused by RailsInformant itself to prevent feedback loops.
       # Primary: CurrentAttributes flag set during notification delivery.

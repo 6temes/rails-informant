@@ -145,7 +145,7 @@ module RailsInformant
     private
 
     def validate_sha_format!(sha)
-      unless sha&.match?(/\A[0-9a-f]{7,40}\z/i)
+      unless sha&.match?(RailsInformant::SHA_FORMAT)
         raise RailsInformant::InvalidParameterError, "Invalid SHA format"
       end
     end

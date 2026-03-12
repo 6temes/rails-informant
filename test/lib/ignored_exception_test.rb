@@ -12,6 +12,22 @@ class RailsInformant::IgnoredExceptionTest < ActiveSupport::TestCase
     assert RailsInformant.ignored_exception?(error)
   end
 
+  test "ignores exception when a cause in the chain is ignored" do
+    cause = ActiveRecord::RecordNotFound.new("not found")
+    wrapper = RuntimeError.new("wrapped")
+    wrapper.define_singleton_method(:cause) { cause }
+    assert RailsInformant.ignored_exception?(wrapper)
+  end
+
+  test "ignores exception with deeply nested ignored cause" do
+    root_cause = ActiveRecord::RecordNotFound.new("not found")
+    middle = RuntimeError.new("middle")
+    middle.define_singleton_method(:cause) { root_cause }
+    outer = StandardError.new("outer")
+    outer.define_singleton_method(:cause) { middle }
+    assert RailsInformant.ignored_exception?(outer)
+  end
+
   test "does not ignore unknown exceptions" do
     error = RuntimeError.new("boom")
     assert_not RailsInformant.ignored_exception?(error)
