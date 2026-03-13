@@ -30,6 +30,7 @@ module RailsInformant
   ].freeze
 
   GIT_SHA_SOURCES = %w[GIT_SHA REVISION KAMAL_VERSION].freeze
+  SHA_FORMAT = /\A[0-9a-f]{7,40}\z/i
 
   autoload :BreadcrumbBuffer, "rails_informant/breadcrumb_buffer"
   autoload :BreadcrumbSubscriber, "rails_informant/breadcrumb_subscriber"
@@ -38,6 +39,7 @@ module RailsInformant
   autoload :Current, "rails_informant/current"
   autoload :ErrorRecorder, "rails_informant/error_recorder"
   autoload :ErrorSubscriber, "rails_informant/error_subscriber"
+  autoload :Event, "rails_informant/event"
   autoload :Fingerprint, "rails_informant/fingerprint"
   autoload :StructuredEventSubscriber, "rails_informant/structured_event_subscriber"
 
@@ -62,6 +64,7 @@ module RailsInformant
              :capture_errors,
              :capture_user_email,
              :ignored_exceptions,
+             :ignored_paths,
              :notifiers,
              :retention_days,
              :slack_webhook_url,
@@ -89,11 +92,25 @@ module RailsInformant
 
     def ignored_exception?(exception)
       ignored = ignored_exception_set
-      exception.class.ancestors.each do |ancestor|
-        name = ancestor.name or next
-        return true if ignored.include?(name)
+      current = exception
+      depth = 0
+      while current && depth < ContextBuilder::MAX_CAUSE_DEPTH
+        current.class.ancestors.each do |ancestor|
+          name = ancestor.name or next
+          return true if ignored.include?(name)
+        end
+        current = current.cause
+        depth += 1
       end
       false
+    end
+
+    def ignored_path?(env)
+      return false unless env
+      paths = ignored_paths
+      return false if paths.empty?
+      request_path = env["PATH_INFO"]
+      paths.any? { request_path == it || request_path&.start_with?("#{it}/") }
     end
 
     def current_git_sha
@@ -104,7 +121,17 @@ module RailsInformant
       error.instance_variable_get(:@__rails_informant_captured)
     end
 
+    def silence
+      was_silenced = Current.silenced
+      Current.silenced = true
+      yield
+    ensure
+      Current.silenced = was_silenced
+    end
+
     def capture(exception, context: {}, request: nil)
+      return if Current.silenced
+      return if ignored_exception?(exception)
       return if already_captured?(exception)
       mark_captured!(exception)
       ErrorRecorder.record exception, severity: "error", context:, env: request&.env

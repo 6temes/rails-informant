@@ -7,6 +7,7 @@ RailsInformant::Engine.routes.draw do
           patch :fix_pending
         end
       end
+      resource :deploy, only: [ :create ], controller: "deploys"
       resources :occurrences, only: [ :index ]
       resource :status, only: [ :show ], controller: "status"
     end

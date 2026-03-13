@@ -55,6 +55,10 @@ module RailsInformant
         perform :get, "#{@path_prefix}/api/v1/occurrences", params: params.compact
       end
 
+      def notify_deploy(sha:)
+        perform :post, "#{@path_prefix}/api/v1/deploy", body: { sha: }
+      end
+
       def status
         perform :get, "#{@path_prefix}/api/v1/status"
       end

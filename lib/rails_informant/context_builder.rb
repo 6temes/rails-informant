@@ -85,19 +85,30 @@ module RailsInformant
           exception_chain: build_exception_chain(error),
           request_context: build_request_context(env),
           user_context: build_user_context(env),
-          custom_context: ContextFilter.filter(RailsInformant::Current.custom_context),
+          custom_context: ContextFilter.filter(build_custom_context(error)),
           environment_context: build_environment_context,
           breadcrumbs: BreadcrumbBuffer.current.flush,
           git_sha: RailsInformant.current_git_sha
         }
       end
 
+      def build_custom_context(error)
+        ctx = RailsInformant::Current.custom_context || {}
+        ctx = ctx.merge(error.to_informant_context) if error.respond_to?(:to_informant_context)
+        ctx.presence
+      end
+
       def extract_controller_action(env, context)
         if env
           params = env["action_dispatch.request.parameters"]
           "#{params["controller"]}##{params["action"]}" if params&.key?("controller") && params&.key?("action")
-        elsif context[:controller] && context[:action]
-          "#{context[:controller]}##{context[:action]}"
+        else
+          case context
+          in { controller: String => controller, action: String => action }
+            "#{controller}##{action}"
+          else
+            nil
+          end
         end
       end
 
@@ -128,14 +139,11 @@ module RailsInformant
       end
 
       def extract_headers(request)
-        headers = {}
-        request.headers.each do |key, value|
+        request.headers.filter_map { |key, value|
           next unless key.start_with?("HTTP_")
           next if SKIP_HEADERS.include?(key)
-          header_name = key.delete_prefix("HTTP_").split("_").map(&:capitalize).join("-")
-          headers[header_name] = value
-        end
-        headers
+          [ key.delete_prefix("HTTP_").split("_").map(&:capitalize).join("-"), value ]
+        }.to_h
       end
 
       def user_context(user)

@@ -42,6 +42,44 @@ class RailsInformant::CaptureTest < ActiveSupport::TestCase
     assert_not RailsInformant.already_captured?(error)
   end
 
+  test "silence block sets Current.silenced for duration" do
+    assert_not RailsInformant::Current.silenced
+
+    RailsInformant.silence do
+      assert RailsInformant::Current.silenced
+    end
+
+    assert_not RailsInformant::Current.silenced
+  end
+
+  test "silence block resets on exception" do
+    assert_raises(RuntimeError) do
+      RailsInformant.silence { raise "boom" }
+    end
+
+    assert_not RailsInformant::Current.silenced
+  end
+
+  test "nested silence blocks restore correctly" do
+    RailsInformant.silence do
+      RailsInformant.silence do
+        assert RailsInformant::Current.silenced
+      end
+      assert RailsInformant::Current.silenced
+    end
+
+    assert_not RailsInformant::Current.silenced
+  end
+
+  test "silence block prevents capture" do
+    error = build_error
+    RailsInformant::ErrorRecorder.expects(:record).never
+
+    RailsInformant.silence do
+      RailsInformant.capture error
+    end
+  end
+
   private
 
   def build_error

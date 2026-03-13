@@ -54,6 +54,33 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
     assert error.instance_variable_get(:@__rails_informant_captured)
   end
 
+  test "skips job error below attempt threshold" do
+    RailsInformant.config.job_attempt_threshold = 3
+    RailsInformant::ErrorRecorder.expects(:record).never
+    @subscriber.report build_error, handled: false, severity: :error,
+      context: { job: { class: "MyJob", executions: 1 } }
+  end
+
+  test "records job error at or above attempt threshold" do
+    RailsInformant.config.job_attempt_threshold = 3
+    RailsInformant::ErrorRecorder.expects(:record).once
+    @subscriber.report build_error, handled: false, severity: :error,
+      context: { job: { class: "MyJob", executions: 3 } }
+  end
+
+  test "records all errors when job_attempt_threshold is nil" do
+    RailsInformant.config.job_attempt_threshold = nil
+    RailsInformant::ErrorRecorder.expects(:record).once
+    @subscriber.report build_error, handled: false, severity: :error,
+      context: { job: { class: "MyJob", executions: 1 } }
+  end
+
+  test "skips when silenced" do
+    RailsInformant::Current.silenced = true
+    RailsInformant::ErrorRecorder.expects(:record).never
+    @subscriber.report build_error, handled: false, severity: :error, context: {}
+  end
+
   test "skips when not initialized" do
     RailsInformant.config.capture_errors = false
     RailsInformant::ErrorRecorder.expects(:record).never

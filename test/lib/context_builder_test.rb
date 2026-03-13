@@ -117,6 +117,38 @@ class RailsInformant::ContextBuilderTest < ActiveSupport::TestCase
     assert_nil ctx
   end
 
+  # -- build_custom_context --
+
+  test "build_custom_context merges to_informant_context from exception" do
+    error = StandardError.new("boom")
+    error.define_singleton_method(:to_informant_context) { { payment_id: 42, gateway: "stripe" } }
+
+    ctx = RailsInformant::ContextBuilder.build_custom_context(error)
+
+    assert_equal 42, ctx[:payment_id]
+    assert_equal "stripe", ctx[:gateway]
+  end
+
+  test "build_custom_context combines Current.custom_context with exception context" do
+    error = StandardError.new("boom")
+    error.define_singleton_method(:to_informant_context) { { from_error: true } }
+
+    RailsInformant::Current.custom_context = { from_current: true }
+    ctx = RailsInformant::ContextBuilder.build_custom_context(error)
+
+    assert ctx[:from_current]
+    assert ctx[:from_error]
+  end
+
+  test "build_custom_context returns nil when no context available" do
+    error = StandardError.new("boom")
+    RailsInformant::Current.custom_context = nil
+
+    ctx = RailsInformant::ContextBuilder.build_custom_context(error)
+
+    assert_nil ctx
+  end
+
   # -- filtered_url --
 
   test "filtered_url filters sensitive query parameters" do

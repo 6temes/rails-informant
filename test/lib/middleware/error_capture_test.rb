@@ -70,6 +70,54 @@ class RailsInformant::Middleware::ErrorCaptureTest < ActiveSupport::TestCase
     end
   end
 
+  test "skips errors from ignored paths" do
+    RailsInformant.config.ignored_paths = %w[/health /up]
+    RailsInformant.reset_caches!
+    RailsInformant::ErrorRecorder.expects(:record).never
+
+    error = StandardError.new("health check timeout")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 500, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call("PATH_INFO" => "/health")
+  end
+
+  test "ignored paths use exact or segment matching, not prefix" do
+    RailsInformant.config.ignored_paths = %w[/up]
+    RailsInformant.reset_caches!
+    RailsInformant::ErrorRecorder.expects(:record).once
+
+    error = StandardError.new("upload error")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 500, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call("PATH_INFO" => "/uploads")
+  end
+
+  test "records errors from non-ignored paths" do
+    RailsInformant.config.ignored_paths = %w[/health]
+    RailsInformant.reset_caches!
+    RailsInformant::ErrorRecorder.expects(:record).once
+
+    error = StandardError.new("real error")
+    error.set_backtrace [ "/app/foo.rb:1" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 500, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call("PATH_INFO" => "/api/users")
+  end
+
   test "passes through successful requests" do
     RailsInformant::ErrorRecorder.expects(:record).never
 
