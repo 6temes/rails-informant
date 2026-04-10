@@ -9,6 +9,7 @@ module RailsInformant
     module NotificationPolicy
       COOLDOWN = 1.hour
       MILESTONE_COUNTS = [ 10, 100, 1000 ].freeze
+      SILENT_STATUSES = %w[duplicate ignored].freeze
 
       PRIVATE_NETWORKS = [
         IPAddr.new("0.0.0.0/8"),       # "This" network
@@ -30,6 +31,7 @@ module RailsInformant
       ].freeze
 
       def should_notify?(error_group)
+        return false if error_group.status.in?(SILENT_STATUSES)
         return true if error_group.total_occurrences == 1
         return true if error_group.total_occurrences.in?(MILESTONE_COUNTS)
         return true if error_group.last_notified_at.nil?

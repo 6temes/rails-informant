@@ -42,6 +42,31 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_not @notifier.should_notify?(group)
   end
 
+  test "should_notify? returns false for duplicate groups" do
+    group = build_error_group status: "duplicate"
+    assert_not @notifier.should_notify?(group)
+  end
+
+  test "should_notify? returns false for ignored groups" do
+    group = build_error_group status: "ignored"
+    assert_not @notifier.should_notify?(group)
+  end
+
+  test "should_notify? returns true for fix_pending groups" do
+    group = build_error_group status: "fix_pending", total_occurrences: 5, last_notified_at: 2.hours.ago
+    assert @notifier.should_notify?(group)
+  end
+
+  test "should_notify? returns true for resolved groups" do
+    group = build_error_group status: "resolved", total_occurrences: 5, last_notified_at: 2.hours.ago
+    assert @notifier.should_notify?(group)
+  end
+
+  test "should_notify? returns true for unresolved groups" do
+    group = build_error_group status: "unresolved", total_occurrences: 5, last_notified_at: 2.hours.ago
+    assert @notifier.should_notify?(group)
+  end
+
   test "notify sends HTTP POST" do
     group = create_error_group
     occurrence = group.occurrences.create!(
