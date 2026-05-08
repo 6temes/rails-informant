@@ -156,6 +156,12 @@ module RailsInformant
         return ENV[key] if ENV[key].present?
       end
 
+      revision_path = Rails.root.join("REVISION")
+      if revision_path.exist?
+        content = revision_path.read.strip
+        return content.match?(SHA_FORMAT) ? content : nil
+      end
+
       head = Rails.root.join(".git", "HEAD").read.strip
       if head.start_with?("ref: ")
         ref = head.delete_prefix("ref: ")

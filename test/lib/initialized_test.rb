@@ -122,6 +122,81 @@ class RailsInformant::InitializedTest < ActiveSupport::TestCase
     end
   end
 
+  test "current_git_sha returns SHA from REVISION file when no env vars or .git" do
+    RailsInformant.reset_caches!
+
+    with_env({}) do
+      with_app_root do |fake_root|
+        File.write fake_root.join("REVISION"), "0123456789abcdef0123456789abcdef01234567\n"
+
+        assert_equal "0123456789abcdef0123456789abcdef01234567", RailsInformant.current_git_sha
+      end
+    end
+  end
+
+  test "current_git_sha accepts abbreviated SHA from REVISION file" do
+    RailsInformant.reset_caches!
+
+    with_env({}) do
+      with_app_root do |fake_root|
+        File.write fake_root.join("REVISION"), "abc1234\n"
+
+        assert_equal "abc1234", RailsInformant.current_git_sha
+      end
+    end
+  end
+
+  test "current_git_sha env var wins over REVISION file" do
+    RailsInformant.reset_caches!
+
+    with_env("GIT_SHA" => "envwins") do
+      with_app_root do |fake_root|
+        File.write fake_root.join("REVISION"), "fileloses0123456789abcdef0123456789ab12"
+
+        assert_equal "envwins", RailsInformant.current_git_sha
+      end
+    end
+  end
+
+  test "current_git_sha returns nil when no env vars, no REVISION, and no .git" do
+    RailsInformant.reset_caches!
+
+    with_env({}) do
+      with_app_root do |_fake_root|
+        assert_nil RailsInformant.current_git_sha
+      end
+    end
+  end
+
+  test "current_git_sha returns nil when REVISION is garbage and does not fall through to .git/HEAD" do
+    RailsInformant.reset_caches!
+
+    with_env({}) do
+      with_app_root do |fake_root|
+        # A valid .git/HEAD that would otherwise resolve.
+        git_dir = fake_root.join(".git")
+        FileUtils.mkdir_p git_dir
+        File.write git_dir.join("HEAD"), "deadbeef1234\n"
+        # But REVISION is garbage -- should short-circuit to nil.
+        File.write fake_root.join("REVISION"), "not-a-sha\n"
+
+        assert_nil RailsInformant.current_git_sha
+      end
+    end
+  end
+
+  test "current_git_sha returns nil when REVISION file is empty" do
+    RailsInformant.reset_caches!
+
+    with_env({}) do
+      with_app_root do |fake_root|
+        File.write fake_root.join("REVISION"), ""
+
+        assert_nil RailsInformant.current_git_sha
+      end
+    end
+  end
+
   test "retries after a failed check" do
     RailsInformant.reset_caches!
 
@@ -166,15 +241,23 @@ class RailsInformant::InitializedTest < ActiveSupport::TestCase
     RailsInformant.remove_instance_variable(:@_current_git_sha) if RailsInformant.instance_variable_defined?(:@_current_git_sha)
   end
 
-  # Creates a temporary directory with a .git subdirectory and stubs
-  # Rails.root to point there, so resolve_git_sha reads from the temp dir.
-  def with_git_dir
+  # Creates a temporary directory and stubs Rails.root to point there,
+  # so resolve_git_sha reads from the temp dir. Yields the fake root.
+  def with_app_root
     Dir.mktmpdir do |tmpdir|
       fake_root = Pathname.new(tmpdir)
-      git_dir = fake_root.join(".git")
-      FileUtils.mkdir_p git_dir
       Rails.stubs(:root).returns(fake_root)
       clear_git_sha_cache!
+      yield fake_root
+    end
+  end
+
+  # Like with_app_root, but also pre-creates a .git subdirectory.
+  # Yields the .git pathname.
+  def with_git_dir
+    with_app_root do |fake_root|
+      git_dir = fake_root.join(".git")
+      FileUtils.mkdir_p git_dir
       yield git_dir
     end
   end
