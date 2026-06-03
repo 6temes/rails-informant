@@ -140,6 +140,73 @@ module RailsInformant
           assert response.error?
           assert_includes response.content.first[:text], "Connection failed"
         end
+
+        def test_verifies_via_pr_merge_commit_when_fix_sha_ancestry_fails
+          pr_url = "https://github.com/acme/app/pull/42"
+          errors = paginated([
+            { "id" => 1, "error_class" => "OpenSSL::SSL::SSLError", "message" => "eof", "fix_sha" => "branch123", "fix_pr_url" => pr_url }
+          ])
+          @client.stubs(:list_errors).returns(errors)
+
+          # Squash merge: the branch commit is not in the deploy, but the PR's merge commit is.
+          VerifyPendingFixes.stubs(:ancestor?).with("branch123", @deploy_sha).returns(false)
+          VerifyPendingFixes.stubs(:merged_pr_commit).with(pr_url).returns("squash987")
+          VerifyPendingFixes.stubs(:ancestor?).with("squash987", @deploy_sha).returns(true)
+
+          @client.expects(:update_error).with(1, status: "resolved").once
+
+          response = VerifyPendingFixes.call(server_context: @server_context)
+
+          data = JSON.parse(response.content.first[:text])
+          assert_equal 1, data["verified"].size
+          assert_equal 0, data["pending"].size
+        end
+
+        def test_pending_when_fix_sha_fails_and_pr_unmerged
+          pr_url = "https://github.com/acme/app/pull/42"
+          errors = paginated([
+            { "id" => 1, "error_class" => "TypeError", "message" => "err", "fix_sha" => "branch123", "fix_pr_url" => pr_url }
+          ])
+          @client.stubs(:list_errors).returns(errors)
+          VerifyPendingFixes.stubs(:ancestor?).with("branch123", @deploy_sha).returns(false)
+          VerifyPendingFixes.stubs(:merged_pr_commit).with(pr_url).returns(nil)
+
+          @client.expects(:update_error).never
+
+          response = VerifyPendingFixes.call(server_context: @server_context)
+
+          data = JSON.parse(response.content.first[:text])
+          assert_equal 0, data["verified"].size
+          assert_equal 1, data["pending"].size
+        end
+
+        def test_merged_pr_commit_returns_oid_for_merged_pr
+          VerifyPendingFixes.stubs(:gh_available?).returns(true)
+          VerifyPendingFixes.stubs(:fetch_commit)
+          gh_json = JSON.dump("state" => "MERGED", "mergeCommit" => { "oid" => "squash987" })
+          Open3.stubs(:capture2).returns([ gh_json, stub(success?: true) ])
+
+          assert_equal "squash987", VerifyPendingFixes.send(:merged_pr_commit, "https://github.com/acme/app/pull/42")
+        end
+
+        def test_merged_pr_commit_returns_nil_for_unmerged_pr
+          VerifyPendingFixes.stubs(:gh_available?).returns(true)
+          gh_json = JSON.dump("state" => "OPEN", "mergeCommit" => nil)
+          Open3.stubs(:capture2).returns([ gh_json, stub(success?: true) ])
+
+          assert_nil VerifyPendingFixes.send(:merged_pr_commit, "https://github.com/acme/app/pull/42")
+        end
+
+        def test_merged_pr_commit_returns_nil_without_gh
+          VerifyPendingFixes.stubs(:gh_available?).returns(false)
+
+          assert_nil VerifyPendingFixes.send(:merged_pr_commit, "https://github.com/acme/app/pull/42")
+        end
+
+        def test_merged_pr_commit_returns_nil_for_blank_url
+          assert_nil VerifyPendingFixes.send(:merged_pr_commit, nil)
+          assert_nil VerifyPendingFixes.send(:merged_pr_commit, "")
+        end
       end
     end
   end
