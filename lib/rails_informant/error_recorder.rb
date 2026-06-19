@@ -12,6 +12,9 @@ module RailsInformant
       end
 
       def record(error, severity: "error", context: {}, source: nil, env: nil)
+        # Never capture from an interactive console — the operator sees errors
+        # live, so recording and alerting on them is noise.
+        return if RailsInformant.console_mode?
         return unless RailsInformant.initialized?
         return if self_caused_error?(error)
 

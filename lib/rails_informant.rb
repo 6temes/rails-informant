@@ -132,6 +132,10 @@ module RailsInformant
       error.instance_variable_set(:@__rails_informant_captured, true) unless error.frozen?
     end
 
+    def console_mode?
+      defined?(Rails::Console)
+    end
+
     def server_mode?
       defined?(Rails::Server)
     end

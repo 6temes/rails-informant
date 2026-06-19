@@ -119,6 +119,13 @@ vanishing silently.
 Add your own classes with `config.ignored_exceptions`; it still walks the cause chain, so
 ignoring a class also ignores exceptions that wrap it.
 
+### Interactive Console
+
+Informant never captures errors raised in an interactive `rails console` session -- nothing
+is recorded and no notifications are sent. You see exceptions live at the prompt, so
+recording and alerting on them would only be noise. This is always on and not configurable.
+Errors from web requests, background jobs, and rake tasks are captured as normal.
+
 ### Silenced Blocks
 
 ```ruby
