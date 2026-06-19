@@ -29,7 +29,7 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
   end
 
   test "skips ignored exceptions" do
-    error = ActiveRecord::RecordNotFound.new("not found")
+    error = SystemExit.new("shutting down")
     RailsInformant::ErrorRecorder.expects(:record).never
     @subscriber.report error, handled: false, severity: :error, context: {}
   end
@@ -87,11 +87,34 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
     @subscriber.report build_error, handled: false, severity: :error, context: {}
   end
 
+  # The incident: a background-job DeserializationError wrapping a RecordNotFound
+  # must be recorded. Asserts through the real model, not a mocked ErrorRecorder.
+  test "records a job DeserializationError whose cause is RecordNotFound" do
+    error = deserialization_error_caused_by_record_not_found
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1,
+                      -> { RailsInformant::Occurrence.count } => 1 do
+      @subscriber.report error, handled: false, severity: :error, context: {}
+    end
+
+    assert_equal "ActiveJob::DeserializationError", RailsInformant::ErrorGroup.last.error_class
+  end
+
   private
 
   def build_error
     error = StandardError.new("boom")
     error.set_backtrace [ "/app/models/user.rb:42" ]
+    error
+  end
+
+  def deserialization_error_caused_by_record_not_found
+    begin
+      raise ActiveRecord::RecordNotFound, "Couldn't find User with 'id'=999"
+    rescue
+      raise ActiveJob::DeserializationError
+    end
+  rescue ActiveJob::DeserializationError => error
     error
   end
 end
