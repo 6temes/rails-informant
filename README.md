@@ -100,6 +100,25 @@ Every option can be set via an environment variable. The initializer takes prece
 
 ## Noise Suppression
 
+### Default Ignored Exceptions
+
+Informant ignores only exceptions that are noise in **every** context: `SignalException`
+and `SystemExit` (process control), plus a few client/tamper errors
+(`Rack::Utils::InvalidParameterError`, `Mime::Type::InvalidMimeType`,
+`CGI::Session::CookieStore::TamperedWithCookie`).
+
+It deliberately does **not** ignore Rails' HTTP client errors -- `RecordNotFound`,
+`RoutingError`, `ParameterMissing`, and the rest of the 4xx family. On the request path
+Rails already maps those to responses (404, 422, ...) and never reports them to
+`Rails.error`, so suppressing them again here was redundant. Off the request path -- in a
+**background job**, a rake task, or wrapped as the cause of another error -- those same
+exceptions are real bugs, so Informant records them. A job that dies on an
+`ActiveJob::DeserializationError` caused by a missing record now alerts instead of
+vanishing silently.
+
+Add your own classes with `config.ignored_exceptions`; it still walks the cause chain, so
+ignoring a class also ignores exceptions that wrap it.
+
 ### Silenced Blocks
 
 ```ruby
