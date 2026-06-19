@@ -13,7 +13,6 @@ module RailsInformant
   # recorded now; what remains is process-control and client/tamper noise.
   IGNORED_EXCEPTIONS_DEFAULT = %w[
     ActionController::UnknownAction
-    ActionController::UrlGenerationError
     CGI::Session::CookieStore::TamperedWithCookie
     Mime::Type::InvalidMimeType
     Rack::Utils::InvalidParameterError
