@@ -43,6 +43,11 @@ class RailsInformant::IgnoredExceptionTest < ActiveSupport::TestCase
     assert_not RailsInformant.ignored_exception?(error)
   end
 
+  test "does not ignore UrlGenerationError (a real 500-class bug, not a Rails-handled response)" do
+    error = ActionController::UrlGenerationError.new("missing required keys")
+    assert_not RailsInformant.ignored_exception?(error)
+  end
+
   test "ignores user-configured string exceptions" do
     RailsInformant.config.ignored_exceptions = [ "RuntimeError" ]
     RailsInformant.reset_caches!
