@@ -107,6 +107,17 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     RailsInformant::Current.delivering_notification = false
   end
 
+  test "skips recording entirely in an interactive console" do
+    RailsInformant.stubs(:console_mode?).returns(true)
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+        RailsInformant::ErrorRecorder.record build_error
+      end
+    end
+  end
+
   test "skips recording entirely when error backtrace includes notifier path" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
 
