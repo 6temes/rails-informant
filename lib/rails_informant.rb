@@ -5,25 +5,17 @@ module RailsInformant
   InvalidParameterError = Class.new(StandardError)
   NotifierError = Class.new(StandardError)
 
+  # Only exceptions that are noise in *every* context. Rails 8.1 maps HTTP
+  # client errors (404s, routing, bad params) via rescue_responses and never
+  # reports them to Rails.error on the request path, so listing them here was
+  # redundant for requests and wrongly suppressed the same exceptions when they
+  # are real bugs in background jobs (e.g. a job's RecordNotFound). Those are
+  # recorded now; what remains is process-control and client/tamper noise.
   IGNORED_EXCEPTIONS_DEFAULT = %w[
-    AbstractController::ActionNotFound
-    ActionController::BadRequest
-    ActionController::InvalidAuthenticityToken
-    ActionController::InvalidCrossOriginRequest
-    ActionController::MethodNotAllowed
-    ActionController::NotImplemented
-    ActionController::ParameterMissing
-    ActionController::RoutingError
     ActionController::UnknownAction
-    ActionController::UnknownFormat
-    ActionController::UnknownHttpMethod
     ActionController::UrlGenerationError
-    ActionDispatch::Http::MimeNegotiation::InvalidType
-    ActiveRecord::RecordNotFound
     CGI::Session::CookieStore::TamperedWithCookie
     Mime::Type::InvalidMimeType
-    Rack::QueryParser::InvalidParameterError
-    Rack::QueryParser::ParameterTypeError
     Rack::Utils::InvalidParameterError
     SignalException
     SystemExit

@@ -42,6 +42,22 @@ class RailsInformant::Middleware::ErrorCaptureTest < ActiveSupport::TestCase
     middleware.call({})
   end
 
+  # The status >= 500 gate — not the ignore list — keeps request 404s out, so
+  # dropping RecordNotFound from the defaults opens no request-path regression.
+  test "does not record a 404 RecordNotFound even though it is no longer ignored" do
+    RailsInformant::ErrorRecorder.expects(:record).never
+
+    error = ActiveRecord::RecordNotFound.new("Couldn't find User with 'id'=999")
+    error.set_backtrace [ "/app/controllers/users_controller.rb:12" ]
+    app = ->(env) {
+      env["rails_informant.rescued_exception"] = error
+      [ 404, {}, [ "" ] ]
+    }
+    middleware = RailsInformant::Middleware::ErrorCapture.new(app)
+
+    middleware.call({})
+  end
+
   test "skips ignored exceptions even when response is 500" do
     RailsInformant::ErrorRecorder.expects(:record).never
     RailsInformant.stubs(:ignored_exception?).returns(true)
