@@ -56,6 +56,33 @@ module RailsInformant
       config.after_initialize { RailsInformant::Engine.validate_api_token! }
     end
 
+    initializer "rails_informant.check_integration_drift" do
+      config.after_initialize { RailsInformant::Engine.check_integration_drift! }
+    end
+
+    # Dev-only, warn-only nudge: when the committed .claude/ integration has
+    # drifted from what the installed gem would generate now, log the one-command
+    # fix and refresh the drift flag the hook reads. Silent when current,
+    # not_installed, error, or in production; never raises out (a drift check must
+    # not break boot).
+    def self.check_integration_drift!
+      return unless Rails.env.development? && (RailsInformant.server_mode? || RailsInformant.console_mode?)
+
+      integration = RailsInformant::Integration.new
+      status = integration.status
+      integration.write_drift_flag stale: status == :stale
+
+      return unless status == :stale
+
+      Rails.logger&.warn <<~MSG.squish
+        [Informant] Your Claude Code integration is out of date — the installed
+        gem would generate different .claude/ files than this app has committed.
+        Run `bin/rails g rails_informant:skill` to update it.
+      MSG
+    rescue StandardError
+      # Never break boot over a drift check.
+    end
+
     MINIMUM_TOKEN_LENGTH = 32
 
     def self.validate_api_token!
