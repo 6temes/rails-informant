@@ -56,6 +56,26 @@ class RailsInformant::InformantAlertsHookTest < ActiveSupport::TestCase
     assert curl_called?
   end
 
+  test "does not treat a prefixed command like /informants as /informant" do
+    set_response unresolved_count: 1, top_errors: []
+
+    out, _status = run_hook prompt: "/informants are cool", session_id: "s-near-miss"
+
+    assert_match "1 unresolved error", out
+    assert curl_called?, "a near-miss prefix must still run the status check"
+  end
+
+  test "stays silent for the rest of the session after a first /informant prompt" do
+    set_response unresolved_count: 4, top_errors: []
+
+    first_out, _status = run_hook prompt: "/informant", session_id: "s-informant-then-work"
+    second_out, _status = run_hook prompt: "implement feature X", session_id: "s-informant-then-work"
+
+    assert_equal "", first_out.strip
+    assert_equal "", second_out.strip
+    assert_not curl_called?, "a later normal prompt must not re-check after /informant"
+  end
+
   test "stays silent for a normal first prompt with zero unresolved errors" do
     set_response unresolved_count: 0
 
