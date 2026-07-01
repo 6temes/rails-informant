@@ -54,6 +54,17 @@ class RailsInformant::DoctorTest < ActiveSupport::TestCase
     RailsInformant::Doctor.new(integration: current, io: StringIO.new).run
   end
 
+  test "exits nonzero when the check raises — never a false green in CI" do
+    broken = mock("integration")
+    broken.stubs(:status).raises(StandardError, "gem spec missing")
+
+    io = StringIO.new
+    code = RailsInformant::Doctor.new(integration: broken, io: io).run
+
+    assert_match "could not complete", io.string
+    assert_equal 1, code
+  end
+
   private
 
   def doctor(status, io)

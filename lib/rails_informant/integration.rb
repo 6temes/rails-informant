@@ -145,21 +145,31 @@ module RailsInformant
 
     # --- json / text helpers ------------------------------------------------
 
-    def parsed_json(path)
-      return nil unless path.exist?
+    # Read and parse each JSON file at most once per instance. Instances are
+    # created fresh per channel call, so this both removes the redundant reads
+    # and lets installed?/json_error?/the digest classify from one consistent
+    # snapshot (no split read where one path sees the file valid and another a
+    # concurrent edit).
+    def json_state(path)
+      @_json_states ||= {}
+      @_json_states[path] ||= compute_json_state(path)
+    end
 
-      JSON.parse path.read
+    def compute_json_state(path)
+      return [ :absent, nil ] unless path.exist?
+
+      [ :ok, JSON.parse(path.read) ]
     rescue JSON::ParserError
-      nil
+      [ :error, nil ]
+    end
+
+    def parsed_json(path)
+      state, data = json_state(path)
+      state == :ok ? data : nil
     end
 
     def parse_failed?(path)
-      return false unless path.exist?
-
-      JSON.parse path.read
-      false
-    rescue JSON::ParserError
-      true
+      json_state(path).first == :error
     end
 
     def read_or_empty(path)
@@ -180,11 +190,13 @@ module RailsInformant
       end
     end
 
-    # Normalize line endings and strip trailing whitespace so a host-side
-    # formatter over .claude/ (CRLF via .gitattributes, an EditorConfig
-    # trim/final-newline rule) does not byte-diverge into a permanent stale.
+    # Strip a leading BOM, normalize line endings, and trim trailing whitespace so
+    # host-side encoding noise (CRLF via .gitattributes, an EditorConfig
+    # trim/final-newline rule, a BOM-prepending editor) does not byte-diverge into
+    # a permanent stale. Content reformatting (reindentation, blank-line collapse)
+    # is intentionally out of scope — it would risk masking real drift.
     def normalize_text(text)
-      text.gsub(/\r\n?/, "\n").split("\n", -1).map(&:rstrip).join("\n").sub(/\n+\z/, "")
+      text.delete_prefix("\uFEFF").gsub(/\r\n?/, "\n").split("\n", -1).map(&:rstrip).join("\n").sub(/\n+\z/, "")
     end
   end
 end

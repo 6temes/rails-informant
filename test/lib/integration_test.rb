@@ -80,6 +80,14 @@ class RailsInformant::IntegrationTest < ActiveSupport::TestCase
     assert_equal :current, integration.status, "line-ending / trailing-whitespace noise must normalize away"
   end
 
+  test "a leading UTF-8 BOM on a text file is current (BOM stripped)" do
+    install_current
+    bom = [ 0xFEFF ].pack("U")
+    skill_file.write bom + Content.skill_markdown
+
+    assert_equal :current, integration.status, "a leading BOM must normalize away"
+  end
+
   test "gem_version reads from Gem.loaded_specs, not the VERSION constant" do
     spec = Gem::Specification.new { |s| s.version = "9.9.9" }
     Gem.stubs(:loaded_specs).returns("rails-informant" => spec)

@@ -22,8 +22,11 @@ prompt=$(printf '%s' "$payload" | jq -r '.prompt // empty' 2>/dev/null || true)
 [[ "$session_id" =~ ^[A-Za-z0-9_-]+$ ]] || exit 0
 
 # Is the committed Claude Code integration out of date? The Ruby channels (dev
-# boot warning, informant:doctor) write this flag under tmp/ relative to the app
-# root, which is the Claude Code session's working directory.
+# boot warning, informant:doctor) write this flag under Rails.root/tmp. This hook
+# reads it relative to the session's working directory, assuming that cwd is the
+# Rails app root. In a monorepo where the Rails root is a subdirectory of the
+# session cwd, this channel stays silent — the boot warning and informant:doctor
+# still cover that case.
 drift=0
 [[ -e "tmp/rails-informant-drift" ]] && drift=1
 

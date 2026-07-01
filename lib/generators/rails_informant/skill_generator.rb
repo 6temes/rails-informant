@@ -40,7 +40,9 @@ module RailsInformant
       if File.exist?(settings_path)
         existing = JSON.parse(File.read(settings_path))
         existing["hooks"] = migrate_informant_hooks(existing["hooks"])
-        existing["hooks"][Content::HOOK_EVENT] ||= []
+        # Coerce a hand-written non-array event value (a lone hook object, a string)
+        # to an array so registering never raises NoMethodError on <<.
+        existing["hooks"][Content::HOOK_EVENT] = [] unless existing["hooks"][Content::HOOK_EVENT].is_a?(Array)
         existing["hooks"][Content::HOOK_EVENT] << Content.hook_registration
         create_file ".claude/settings.json", JSON.pretty_generate(existing) + "\n", force: true
       else

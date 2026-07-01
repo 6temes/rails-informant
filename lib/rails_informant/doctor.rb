@@ -17,8 +17,10 @@ module RailsInformant
       @io.puts report_for(status)
       exit_code_for status
     rescue StandardError => e
+      # An unexpected failure must exit nonzero, not 0 — a doctor wired into CI
+      # to gate drift must never report a false green when it could not check.
       @io.puts "[Informant] doctor could not complete: #{e.message}"
-      0
+      1
     end
 
     private

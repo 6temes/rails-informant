@@ -49,10 +49,10 @@ module RailsInformant
     end
 
     # A single UserPromptSubmit hook registration for settings.json.
-    def hook_registration(command = HOOK_COMMAND)
+    def hook_registration
       {
         "hooks" => [
-          { "type" => "command", "command" => command, "timeout" => 10 }
+          { "type" => "command", "command" => HOOK_COMMAND, "timeout" => 10 }
         ]
       }
     end
@@ -68,9 +68,9 @@ module RailsInformant
     # Whether a settings.json hook entry targets the informant script — the
     # shared match-by-path predicate used by both generation (to sweep stale
     # registrations) and detection (to extract the informant fragment).
-    def informant_hook_entry?(entry, command = HOOK_COMMAND)
+    def informant_hook_entry?(entry)
       entry.is_a?(Hash) && Array(entry["hooks"]).any? do |hook|
-        hook.is_a?(Hash) && hook["command"] == command
+        hook.is_a?(Hash) && hook["command"] == HOOK_COMMAND
       end
     end
   end

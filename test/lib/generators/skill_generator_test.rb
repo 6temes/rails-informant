@@ -177,6 +177,19 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       "the generator's output must match the installed gem's expected content"
   end
 
+  test "coerces a hand-written non-array event value instead of crashing" do
+    write_settings "hooks" => { "UserPromptSubmit" => { "type" => "command" } }
+
+    assert_nothing_raised { run_generator }
+
+    assert_file ".claude/settings.json" do |content|
+      hooks = JSON.parse(content).dig("hooks", "UserPromptSubmit")
+      assert_kind_of Array, hooks
+      assert_equal 1, hooks.length
+      assert_equal ".claude/hooks/informant-alerts.sh", hooks.first.dig("hooks", 0, "command")
+    end
+  end
+
   private
 
   def informant_hook_entry
