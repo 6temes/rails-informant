@@ -192,6 +192,22 @@ export INFORMANT_STAGING_URL=https://staging.myapp.com
 export INFORMANT_STAGING_TOKEN=<token>
 ```
 
+### Keeping it in sync
+
+The generator's output (`.claude/`, `.mcp.json`) is committed to your app, so a gem update leaves those files untouched. After `bundle update rails-informant`, re-run the generator and commit the result to pick up template changes:
+
+```sh
+bin/rails generate rails_informant:skill
+```
+
+Re-running migrates any prior hook registration in place, so there are no duplicates. The gem also flags drift when the committed files fall behind the installed version — via a warning on dev boot, an in-session Claude Code nudge, and an on-demand check:
+
+```sh
+bin/rails informant:doctor   # reports current / stale / not installed; exits nonzero when stale
+```
+
+Apps that use the gem only for error capture (no Claude Code integration) are never affected.
+
 ### Tools
 
 | Tool | Description |
