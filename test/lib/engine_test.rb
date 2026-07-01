@@ -59,6 +59,60 @@ class RailsInformant::EngineTest < ActiveSupport::TestCase
     assert_nothing_raised { RailsInformant::Engine.validate_api_token! }
   end
 
+  test "check_integration_drift! warns and refreshes the flag on stale in development server mode" do
+    stub_development_server
+    RailsInformant::Integration.any_instance.stubs(:status).returns(:stale)
+    RailsInformant::Integration.any_instance.expects(:write_drift_flag).with(stale: true)
+
+    Rails.logger.expects(:warn).with(regexp_matches(/rails_informant:skill/))
+    assert_nothing_raised { RailsInformant::Engine.check_integration_drift! }
+  end
+
+  test "check_integration_drift! is silent in production even when stale" do
+    Rails.stubs(:env).returns(ActiveSupport::StringInquirer.new("production"))
+    RailsInformant.stubs(:server_mode?).returns(true)
+
+    Rails.logger.expects(:warn).never
+    assert_nothing_raised { RailsInformant::Engine.check_integration_drift! }
+  end
+
+  test "check_integration_drift! is silent when the integration is current" do
+    stub_development_server
+    RailsInformant::Integration.any_instance.stubs(:status).returns(:current)
+    RailsInformant::Integration.any_instance.expects(:write_drift_flag).with(stale: false)
+
+    Rails.logger.expects(:warn).never
+    RailsInformant::Engine.check_integration_drift!
+  end
+
+  test "check_integration_drift! is silent when not_installed or error" do
+    stub_development_server
+    RailsInformant::Integration.any_instance.stubs(:status).returns(:not_installed)
+    RailsInformant::Integration.any_instance.stubs(:write_drift_flag)
+
+    Rails.logger.expects(:warn).never
+    RailsInformant::Engine.check_integration_drift!
+
+    RailsInformant::Integration.any_instance.stubs(:status).returns(:error)
+    RailsInformant::Engine.check_integration_drift!
+  end
+
+  test "check_integration_drift! swallows errors and never breaks boot" do
+    stub_development_server
+    RailsInformant::Integration.any_instance.stubs(:status).raises(StandardError, "boom")
+
+    Rails.logger.expects(:warn).never
+    assert_nothing_raised { RailsInformant::Engine.check_integration_drift! }
+  end
+
+  test "check_integration_drift! is silent outside development" do
+    Rails.stubs(:env).returns(ActiveSupport::StringInquirer.new("test"))
+    RailsInformant.stubs(:server_mode?).returns(true)
+
+    Rails.logger.expects(:warn).never
+    RailsInformant::Engine.check_integration_drift!
+  end
+
   test "log_pending_fixes logs count when fix_pending errors exist" do
     RailsInformant.stubs(:server_mode?).returns(true)
     create_error_group(fingerprint: "fp-pending").mark_as_fix_pending!(
@@ -70,5 +124,12 @@ class RailsInformant::EngineTest < ActiveSupport::TestCase
     # Simulates the initializer logic — see engine.rb log_pending_fixes
     count = RailsInformant::ErrorGroup.where(status: "fix_pending").count
     Rails.logger.info "[Informant] #{count} error(s) awaiting fix verification" unless count.zero?
+  end
+
+  private
+
+  def stub_development_server
+    Rails.stubs(:env).returns(ActiveSupport::StringInquirer.new("development"))
+    RailsInformant.stubs(:server_mode?).returns(true)
   end
 end

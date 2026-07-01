@@ -1,8 +1,11 @@
 require "json"
 require "rails/generators"
+require "rails_informant/claude_integration_content"
 
 module RailsInformant
   class SkillGenerator < Rails::Generators::Base
+    Content = ClaudeIntegrationContent
+
     source_root File.expand_path("skill/templates", __dir__)
 
     def copy_skill_file
@@ -16,16 +19,15 @@ module RailsInformant
 
     def create_or_update_mcp_json
       mcp_path = File.join(destination_root, ".mcp.json")
-      informant_entry = { "command" => "informant-mcp" }
 
       if File.exist?(mcp_path)
         existing = JSON.parse(File.read(mcp_path))
         existing["mcpServers"] ||= {}
-        existing["mcpServers"]["informant"] = informant_entry
+        existing["mcpServers"]["informant"] = Content.mcp_entry
         create_file ".mcp.json", JSON.pretty_generate(existing) + "\n", force: true
       else
         create_file ".mcp.json", JSON.pretty_generate(
-          "mcpServers" => { "informant" => informant_entry }
+          "mcpServers" => { "informant" => Content.mcp_entry }
         ) + "\n"
       end
     rescue JSON::ParserError
@@ -34,29 +36,26 @@ module RailsInformant
 
     def create_or_update_settings_json
       settings_path = File.join(destination_root, ".claude", "settings.json")
-      hook_command = ".claude/hooks/informant-alerts.sh"
 
       if File.exist?(settings_path)
         existing = JSON.parse(File.read(settings_path))
-        existing["hooks"] ||= {}
-        existing["hooks"]["UserPromptSubmit"] ||= []
-
-        already_registered = existing["hooks"]["UserPromptSubmit"].any? do |entry|
-          entry["hooks"]&.any? { it["command"] == hook_command }
-        end
-
-        unless already_registered
-          existing["hooks"]["UserPromptSubmit"] << user_prompt_submit_hook(hook_command)
-        end
-
+        existing["hooks"] = migrate_informant_hooks(existing["hooks"])
+        # Coerce a hand-written non-array event value (a lone hook object, a string)
+        # to an array so registering never raises NoMethodError on <<.
+        existing["hooks"][Content::HOOK_EVENT] = [] unless existing["hooks"][Content::HOOK_EVENT].is_a?(Array)
+        existing["hooks"][Content::HOOK_EVENT] << Content.hook_registration
         create_file ".claude/settings.json", JSON.pretty_generate(existing) + "\n", force: true
       else
         create_file ".claude/settings.json", JSON.pretty_generate(
-          "hooks" => { "UserPromptSubmit" => [ user_prompt_submit_hook(hook_command) ] }
+          "hooks" => Content.expected_registrations
         ) + "\n"
       end
     rescue JSON::ParserError
       say "Could not parse existing .claude/settings.json — skipping hook setup.", :red
+    end
+
+    def clear_drift_flag
+      RailsInformant::Integration.new(app_root: destination_root).write_drift_flag stale: false
     end
 
     def print_next_steps
@@ -82,12 +81,18 @@ module RailsInformant
 
     private
 
-    def user_prompt_submit_hook(command)
-      {
-        "hooks" => [
-          { "type" => "command", "command" => command, "timeout" => 10 }
-        ]
-      }
+    # Remove every prior informant registration (matched by script path) from all
+    # event keys and drop keys left empty, so a re-run migrates a stale
+    # registration (e.g. a leftover SessionStart from an earlier gem version)
+    # instead of adding a second one alongside it. Unrelated hooks are preserved.
+    # Self-heals across future event-key changes rather than hardcoding an event.
+    def migrate_informant_hooks(hooks)
+      hooks = {} unless hooks.is_a?(Hash)
+      hooks.each_value do |entries|
+        entries.reject! { |entry| Content.informant_hook_entry?(entry) } if entries.is_a?(Array)
+      end
+      hooks.reject! { |_event, entries| entries.is_a?(Array) && entries.empty? }
+      hooks
     end
   end
 end

@@ -114,7 +114,92 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
     end
   end
 
+  test "migrates a stale SessionStart informant registration to UserPromptSubmit" do
+    write_settings "hooks" => { "SessionStart" => [ informant_hook_entry ] }
+
+    run_generator
+
+    assert_file ".claude/settings.json" do |content|
+      settings = JSON.parse(content)
+      assert_nil settings.dig("hooks", "SessionStart"), "the stale SessionStart key should be gone"
+      user_prompt_submit = settings.dig("hooks", "UserPromptSubmit")
+      assert_equal 1, user_prompt_submit.length
+      assert_equal ".claude/hooks/informant-alerts.sh", user_prompt_submit.first.dig("hooks", 0, "command")
+    end
+  end
+
+  test "preserves an unrelated hook under SessionStart while migrating the informant entry" do
+    write_settings "hooks" => {
+      "SessionStart" => [
+        { "hooks" => [ { "type" => "command", "command" => "other-tool.sh" } ] },
+        informant_hook_entry
+      ]
+    }
+
+    run_generator
+
+    assert_file ".claude/settings.json" do |content|
+      settings = JSON.parse(content)
+      session_start = settings.dig("hooks", "SessionStart")
+      assert_equal 1, session_start.length, "the unrelated SessionStart hook must survive"
+      assert_equal "other-tool.sh", session_start.first.dig("hooks", 0, "command")
+      assert_equal 1, settings.dig("hooks", "UserPromptSubmit").length
+    end
+  end
+
+  test "removes a stale informant registration under any event key" do
+    write_settings "hooks" => { "PostToolUse" => [ informant_hook_entry ] }
+
+    run_generator
+
+    assert_file ".claude/settings.json" do |content|
+      settings = JSON.parse(content)
+      assert_nil settings.dig("hooks", "PostToolUse")
+      assert_equal 1, settings.dig("hooks", "UserPromptSubmit").length
+    end
+  end
+
+  test "clears the drift flag after generating" do
+    flag = File.join(destination_root, "tmp", "rails-informant-drift")
+    FileUtils.mkdir_p File.dirname(flag)
+    File.write flag, "stale"
+
+    run_generator
+
+    assert_not File.exist?(flag), "generating should clear the drift flag"
+  end
+
+  test "generated integration is byte-identical to what Integration considers current" do
+    run_generator
+
+    integration = RailsInformant::Integration.new(app_root: destination_root)
+    assert_equal :current, integration.status,
+      "the generator's output must match the installed gem's expected content"
+  end
+
+  test "coerces a hand-written non-array event value instead of crashing" do
+    write_settings "hooks" => { "UserPromptSubmit" => { "type" => "command" } }
+
+    assert_nothing_raised { run_generator }
+
+    assert_file ".claude/settings.json" do |content|
+      hooks = JSON.parse(content).dig("hooks", "UserPromptSubmit")
+      assert_kind_of Array, hooks
+      assert_equal 1, hooks.length
+      assert_equal ".claude/hooks/informant-alerts.sh", hooks.first.dig("hooks", 0, "command")
+    end
+  end
+
   private
+
+  def informant_hook_entry
+    { "hooks" => [ { "type" => "command", "command" => ".claude/hooks/informant-alerts.sh", "timeout" => 10 } ] }
+  end
+
+  def write_settings(data)
+    mkdir_p ".claude"
+    File.write File.join(destination_root, ".claude/settings.json"), JSON.pretty_generate(data)
+  end
 
   def mkdir_p(relative_path)
     FileUtils.mkdir_p File.join(destination_root, relative_path)

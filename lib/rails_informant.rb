@@ -25,13 +25,16 @@ module RailsInformant
 
   autoload :BreadcrumbBuffer, "rails_informant/breadcrumb_buffer"
   autoload :BreadcrumbSubscriber, "rails_informant/breadcrumb_subscriber"
+  autoload :ClaudeIntegrationContent, "rails_informant/claude_integration_content"
   autoload :ContextBuilder, "rails_informant/context_builder"
   autoload :ContextFilter, "rails_informant/context_filter"
   autoload :Current, "rails_informant/current"
+  autoload :Doctor, "rails_informant/doctor"
   autoload :ErrorRecorder, "rails_informant/error_recorder"
   autoload :ErrorSubscriber, "rails_informant/error_subscriber"
   autoload :Event, "rails_informant/event"
   autoload :Fingerprint, "rails_informant/fingerprint"
+  autoload :Integration, "rails_informant/integration"
   autoload :StructuredEventSubscriber, "rails_informant/structured_event_subscriber"
 
   module Middleware

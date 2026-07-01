@@ -114,6 +114,76 @@ class RailsInformant::InformantAlertsHookTest < ActiveSupport::TestCase
     assert_not curl_called?
   end
 
+  test "emits the drift nudge when the drift flag is set on a normal first prompt" do
+    create_drift_flag
+    set_response unresolved_count: 0
+
+    out, status = run_hook prompt: "add a feature", session_id: "s-drift"
+
+    assert status.success?
+    assert_match "integration is out of date", out
+    assert_match "bin/rails g rails_informant:skill", out
+    assert_match "update it now or continue", out, "the nudge must offer a concrete choice"
+    assert_match "Do NOT proceed", out, "the nudge must force a pause"
+    assert_no_match(/BLOCKING REQUIREMENT/, out)
+  end
+
+  test "emits the drift nudge even when production env vars are unset" do
+    create_drift_flag
+
+    out, status = run_hook prompt: "start work", session_id: "s-drift-noenv",
+      env: { "INFORMANT_PRODUCTION_URL" => nil, "INFORMANT_PRODUCTION_TOKEN" => nil }
+
+    assert status.success?
+    assert_match "integration is out of date", out
+    assert_not curl_called?, "the drift nudge must not depend on the production check"
+  end
+
+  test "does not emit the drift nudge when the flag is absent" do
+    set_response unresolved_count: 0
+
+    out, _status = run_hook prompt: "hello", session_id: "s-nodrift"
+
+    assert_equal "", out.strip
+    assert_no_match(/integration is out of date/, out)
+  end
+
+  test "suppresses the drift nudge when the first prompt is /informant" do
+    create_drift_flag
+
+    out, status = run_hook prompt: "/informant", session_id: "s-drift-informant"
+
+    assert_equal "", out.strip
+    assert status.success?
+    assert_not curl_called?
+  end
+
+  test "combines drift and production into a single message with one pause" do
+    create_drift_flag
+    set_response unresolved_count: 3, top_errors: [
+      { error_class: "ActiveRecord::StatementTimeout", total_occurrences: 5 }
+    ]
+
+    out, status = run_hook prompt: "ship it", session_id: "s-drift-and-errors"
+
+    assert status.success?
+    assert_match "integration is out of date", out
+    assert_match "3 unresolved errors in production", out
+    assert_match "ActiveRecord::StatementTimeout", out
+    assert_equal 1, out.scan("Do NOT proceed").length, "a combined message must pause exactly once"
+  end
+
+  test "does not re-emit the drift nudge later in the same session" do
+    create_drift_flag
+    set_response unresolved_count: 0
+
+    first_out, _status = run_hook prompt: "start", session_id: "s-drift-once"
+    second_out, _status = run_hook prompt: "keep going", session_id: "s-drift-once"
+
+    assert_match "integration is out of date", first_out
+    assert_equal "", second_out.strip
+  end
+
   private
 
   def run_hook(prompt:, session_id:, env: {})
@@ -127,8 +197,15 @@ class RailsInformant::InformantAlertsHookTest < ActiveSupport::TestCase
     }.merge(env)
 
     payload = JSON.generate(session_id:, prompt:)
-    out, _err, status = Open3.capture3 base_env, "bash", HOOK_SCRIPT, stdin_data: payload
+    # Run in @tmpdir so the cwd-relative drift flag (tmp/rails-informant-drift) is
+    # under test control and does not leak in from the repo.
+    out, _err, status = Open3.capture3 base_env, "bash", HOOK_SCRIPT, stdin_data: payload, chdir: @tmpdir
     [ out, status ]
+  end
+
+  def create_drift_flag
+    FileUtils.mkdir_p File.join(@tmpdir, "tmp")
+    File.write File.join(@tmpdir, "tmp", "rails-informant-drift"), "stale\n"
   end
 
   # A fake curl that records its invocation and returns the canned status body.
