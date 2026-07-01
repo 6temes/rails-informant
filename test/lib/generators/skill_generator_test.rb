@@ -41,15 +41,16 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
     end
   end
 
-  test "creates settings.json with SessionStart hook" do
+  test "creates settings.json with UserPromptSubmit hook" do
     run_generator
 
     assert_file ".claude/settings.json" do |content|
       settings = JSON.parse(content)
-      hooks = settings.dig("hooks", "SessionStart")
+      assert_nil settings.dig("hooks", "SessionStart")
+      hooks = settings.dig("hooks", "UserPromptSubmit")
       assert_not_nil hooks
       assert_equal 1, hooks.length
-      assert_equal "startup", hooks.first["matcher"]
+      assert_nil hooks.first["matcher"]
       assert_equal ".claude/hooks/informant-alerts.sh", hooks.first.dig("hooks", 0, "command")
       assert_equal 10, hooks.first.dig("hooks", 0, "timeout")
     end
@@ -73,9 +74,9 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       # Existing hooks preserved
       assert_not_nil settings.dig("hooks", "PreToolUse")
       # New hook added
-      session_hooks = settings.dig("hooks", "SessionStart")
-      assert_equal 1, session_hooks.length
-      assert_equal ".claude/hooks/informant-alerts.sh", session_hooks.first.dig("hooks", 0, "command")
+      prompt_hooks = settings.dig("hooks", "UserPromptSubmit")
+      assert_equal 1, prompt_hooks.length
+      assert_equal ".claude/hooks/informant-alerts.sh", prompt_hooks.first.dig("hooks", 0, "command")
     end
   end
 
@@ -85,7 +86,7 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
 
     assert_file ".claude/settings.json" do |content|
       settings = JSON.parse(content)
-      hooks = settings.dig("hooks", "SessionStart")
+      hooks = settings.dig("hooks", "UserPromptSubmit")
       assert_equal 1, hooks.length
     end
   end
