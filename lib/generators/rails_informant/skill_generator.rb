@@ -39,20 +39,20 @@ module RailsInformant
       if File.exist?(settings_path)
         existing = JSON.parse(File.read(settings_path))
         existing["hooks"] ||= {}
-        existing["hooks"]["SessionStart"] ||= []
+        existing["hooks"]["UserPromptSubmit"] ||= []
 
-        already_registered = existing["hooks"]["SessionStart"].any? do |entry|
+        already_registered = existing["hooks"]["UserPromptSubmit"].any? do |entry|
           entry["hooks"]&.any? { it["command"] == hook_command }
         end
 
         unless already_registered
-          existing["hooks"]["SessionStart"] << session_start_hook(hook_command)
+          existing["hooks"]["UserPromptSubmit"] << user_prompt_submit_hook(hook_command)
         end
 
         create_file ".claude/settings.json", JSON.pretty_generate(existing) + "\n", force: true
       else
         create_file ".claude/settings.json", JSON.pretty_generate(
-          "hooks" => { "SessionStart" => [ session_start_hook(hook_command) ] }
+          "hooks" => { "UserPromptSubmit" => [ user_prompt_submit_hook(hook_command) ] }
         ) + "\n"
       end
     rescue JSON::ParserError
@@ -66,7 +66,7 @@ module RailsInformant
       say "  Created .mcp.json"
       say "  Created .claude/skills/informant/SKILL.md"
       say "  Created .claude/hooks/informant-alerts.sh"
-      say "  Created .claude/settings.json (SessionStart hook)"
+      say "  Created .claude/settings.json (UserPromptSubmit hook)"
       say ""
       say "Next step — set env vars so the MCP server and startup alerts can reach your app.", :yellow
       say "Add to your .envrc (or export manually):"
@@ -82,9 +82,8 @@ module RailsInformant
 
     private
 
-    def session_start_hook(command)
+    def user_prompt_submit_hook(command)
       {
-        "matcher" => "startup",
         "hooks" => [
           { "type" => "command", "command" => command, "timeout" => 10 }
         ]

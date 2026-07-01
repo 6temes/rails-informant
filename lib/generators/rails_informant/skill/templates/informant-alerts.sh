@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Informant: Check for unresolved production errors on Claude Code startup.
+# Informant: On the first Claude Code prompt of a session, check for unresolved
+# production errors — unless that first prompt is the /informant command.
 # Requires: curl, jq
 # Env vars: INFORMANT_PRODUCTION_URL, INFORMANT_PRODUCTION_TOKEN
 #           INFORMANT_PRODUCTION_PATH_PREFIX (optional, default: /informant)
@@ -11,8 +12,27 @@ set -euo pipefail
 [[ -z "${INFORMANT_PRODUCTION_TOKEN:-}" ]] && exit 0
 [[ "$INFORMANT_PRODUCTION_URL" == https://* ]] || exit 0
 
-# Silent exit if jq is not installed
+# Silent exit if jq is not installed (needed to parse the hook payload)
 command -v jq >/dev/null 2>&1 || exit 0
+
+# UserPromptSubmit delivers a JSON payload on stdin carrying session_id and prompt.
+payload=$(cat)
+session_id=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || true)
+
+# Run at most once per session, on the first prompt: a marker keyed by session_id
+# records that this session was handled, so later prompts short-circuit here before
+# parsing the prompt or doing network work. Require a token-shaped session_id (it is
+# interpolated into the path below) and stay silent when we can't record the marker,
+# rather than re-alerting on every later prompt of the session.
+[[ "$session_id" =~ ^[A-Za-z0-9_-]+$ ]] || exit 0
+marker="${TMPDIR:-/tmp}/rails-informant-alert-${session_id}"
+[[ -e "$marker" ]] && exit 0
+: > "$marker" 2>/dev/null || exit 0
+
+# Stay quiet for the whole session when the first prompt is the /informant command —
+# the user is already triaging errors, so the startup alert would be redundant.
+prompt=$(printf '%s' "$payload" | jq -r '.prompt // empty' 2>/dev/null || true)
+[[ "$prompt" =~ ^/informant($|[[:space:]]) ]] && exit 0
 
 path_prefix="${INFORMANT_PRODUCTION_PATH_PREFIX:-/informant}"
 url="${INFORMANT_PRODUCTION_URL}${path_prefix}/api/v1/status"
@@ -25,8 +45,9 @@ response=$(curl -s -f \
   "$url" <<< "Authorization: Bearer ${INFORMANT_PRODUCTION_TOKEN}" \
   2>/dev/null) || exit 0
 
-# Parse unresolved count
-unresolved=$(echo "$response" | jq -r '.unresolved_count // 0') || exit 0
+# Parse unresolved count (silent exit on a missing or non-numeric value)
+unresolved=$(echo "$response" | jq -r '.unresolved_count // 0' 2>/dev/null) || exit 0
+[[ "$unresolved" =~ ^[0-9]+$ ]] || exit 0
 [[ "$unresolved" -eq 0 ]] && exit 0
 
 # Format error summary
