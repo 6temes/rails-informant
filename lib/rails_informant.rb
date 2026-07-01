@@ -29,6 +29,7 @@ module RailsInformant
   autoload :ContextBuilder, "rails_informant/context_builder"
   autoload :ContextFilter, "rails_informant/context_filter"
   autoload :Current, "rails_informant/current"
+  autoload :Doctor, "rails_informant/doctor"
   autoload :ErrorRecorder, "rails_informant/error_recorder"
   autoload :ErrorSubscriber, "rails_informant/error_subscriber"
   autoload :Event, "rails_informant/event"

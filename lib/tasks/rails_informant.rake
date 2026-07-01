@@ -1,4 +1,9 @@
 namespace :informant do
+  desc "Report whether the Claude Code integration is current, stale, or not installed"
+  task doctor: :environment do
+    exit RailsInformant::Doctor.new.run
+  end
+
   desc "Purge resolved errors older than retention_days"
   task purge: :environment do
     RailsInformant::PurgeJob.perform_now
