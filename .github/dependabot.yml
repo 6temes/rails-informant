@@ -1,10 +1,35 @@
 version: 2
 updates:
-  - package-ecosystem: bundler
-    directory: /
+  - package-ecosystem: 'bundler'
+    directory: '/'
     schedule:
-      interval: weekly
-  - package-ecosystem: github-actions
-    directory: /
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Asia/Tokyo'
+    assignees:
+      - '6temes'
+    labels:
+      - 'dependencies'
+      - 'ruby'
+    groups:
+      minor-and-patch:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+    versioning-strategy: lockfile-only
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: weekly
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Asia/Tokyo'
+    assignees:
+      - '6temes'
+    labels:
+      - 'dependencies'
+      - 'github-actions'
