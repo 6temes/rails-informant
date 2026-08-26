@@ -1,6 +1,7 @@
 module RailsInformant
   class Configuration
     attr_accessor :capture_errors,
+                  :capture_runner_errors,
                   :capture_user_email,
                   :api_token,
                   :ignored_exceptions,
@@ -17,6 +18,7 @@ module RailsInformant
       @api_token = ENV["INFORMANT_API_TOKEN"]
       @app_name = ENV["INFORMANT_APP_NAME"]
       @capture_errors = ENV.fetch("INFORMANT_CAPTURE_ERRORS", "true") != "false"
+      @capture_runner_errors = ENV.fetch("INFORMANT_CAPTURE_RUNNER_ERRORS", "true") != "false"
       @capture_user_email = false
       @custom_notifiers = []
       @ignored_exceptions = ENV["INFORMANT_IGNORED_EXCEPTIONS"]&.split(",")&.map(&:strip) || []

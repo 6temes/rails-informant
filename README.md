@@ -87,6 +87,7 @@ Every option can be set via an environment variable. The initializer takes prece
 |--------|---------|---------|-------------|
 | `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for API/MCP access |
 | `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture |
+| `capture_runner_errors` | `INFORMANT_CAPTURE_RUNNER_ERRORS` | `true` | Capture errors raised under `rails runner` |
 | `capture_user_email` | _(none)_ | `false` | Capture email from detected user (PII -- opt-in) |
 | `ignored_exceptions` | `INFORMANT_IGNORED_EXCEPTIONS` | `[]` | Exception classes to skip (walks cause chain) |
 | `ignored_paths` | `INFORMANT_IGNORED_PATHS` | `[]` | Request paths to skip (exact or segment match) |
@@ -125,6 +126,19 @@ Informant never captures errors raised in an interactive `rails console` session
 is recorded and no notifications are sent. You see exceptions live at the prompt, so
 recording and alerting on them would only be noise. This is always on and not configurable.
 Errors from web requests, background jobs, and rake tasks are captured as normal.
+
+### Rails Runner
+
+`rails runner` is captured by default, because it is how many apps run cron and scheduled
+tasks -- exactly the errors you want to hear about. If your app instead uses it by hand, for
+one-off production data corrections, the operator already sees the exception on their own
+terminal and recording it only pages the team:
+
+```ruby
+config.capture_runner_errors = false
+```
+
+That applies only to `rails runner`; requests, jobs and rake tasks are captured either way.
 
 ### Silenced Blocks
 

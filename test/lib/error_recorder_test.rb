@@ -118,6 +118,35 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     end
   end
 
+  test "skips recording in rails runner when capture_runner_errors is off" do
+    RailsInformant.stubs(:runner_mode?).returns(true)
+    RailsInformant.config.capture_runner_errors = false
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+        RailsInformant::ErrorRecorder.record build_error
+      end
+    end
+  end
+
+  test "records in rails runner by default, so scheduled tasks still report" do
+    RailsInformant.stubs(:runner_mode?).returns(true)
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      RailsInformant::ErrorRecorder.record build_error
+    end
+  end
+
+  test "capture_runner_errors does not suppress errors outside rails runner" do
+    RailsInformant.stubs(:runner_mode?).returns(false)
+    RailsInformant.config.capture_runner_errors = false
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      RailsInformant::ErrorRecorder.record build_error
+    end
+  end
+
   test "skips recording entirely when error backtrace includes notifier path" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
 
