@@ -15,6 +15,10 @@ module RailsInformant
         # Never capture from an interactive console — the operator sees errors
         # live, so recording and alerting on them is noise.
         return if RailsInformant.console_mode?
+        # `rails runner` is the same shape when an operator drives it by hand, but it also
+        # backs cron and scheduled tasks, where those errors are the whole point. Apps that
+        # only use it interactively opt out; capturing stays the default.
+        return if RailsInformant.runner_mode? && !RailsInformant.config.capture_runner_errors
         return unless RailsInformant.initialized?
         return if self_caused_error?(error)
 

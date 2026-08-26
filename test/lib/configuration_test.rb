@@ -95,6 +95,19 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     ENV.delete("INFORMANT_CAPTURE_ERRORS")
   end
 
+  test "capture_runner_errors defaults to true" do
+    config = RailsInformant::Configuration.new
+    assert_equal true, config.capture_runner_errors
+  end
+
+  test "capture_runner_errors reads false from ENV" do
+    ENV["INFORMANT_CAPTURE_RUNNER_ERRORS"] = "false"
+    config = RailsInformant::Configuration.new
+    assert_equal false, config.capture_runner_errors
+  ensure
+    ENV.delete("INFORMANT_CAPTURE_RUNNER_ERRORS")
+  end
+
   test "retention_days reads from ENV" do
     ENV["INFORMANT_RETENTION_DAYS"] = "90"
     config = RailsInformant::Configuration.new

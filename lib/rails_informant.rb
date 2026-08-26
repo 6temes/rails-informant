@@ -139,6 +139,11 @@ module RailsInformant
       defined?(Rails::Console)
     end
 
+    # `rails runner` loads this command class; a server, worker or rake process never does.
+    def runner_mode?
+      defined?(Rails::Command::RunnerCommand)
+    end
+
     def server_mode?
       defined?(Rails::Server)
     end
