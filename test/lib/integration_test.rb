@@ -37,6 +37,16 @@ class RailsInformant::IntegrationTest < ActiveSupport::TestCase
     assert_equal :stale, integration.status
   end
 
+  test "a legacy bare-relative hook command is recognised as informant's and reads as stale" do
+    install_current
+    write_settings "hooks" => {
+      "UserPromptSubmit" => [ { "hooks" => [ { "type" => "command", "command" => Content::HOOK_SCRIPT_PATH, "timeout" => 10 } ] } ]
+    }
+
+    assert integration.installed?, "a legacy registration must still count as installed"
+    assert_equal :stale, integration.status, "a legacy install must be prompted to re-run the generator"
+  end
+
   test "hook script deleted while an informant entry remains is stale" do
     install_current
     hook_file.delete

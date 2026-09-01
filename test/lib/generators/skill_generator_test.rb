@@ -4,6 +4,7 @@ require "generators/rails_informant/skill_generator"
 
 class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
   tests RailsInformant::SkillGenerator
+  Content = RailsInformant::ClaudeIntegrationContent
   destination File.expand_path("../../tmp/generator_test", __dir__)
 
   setup do
@@ -51,8 +52,29 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       assert_not_nil hooks
       assert_equal 1, hooks.length
       assert_nil hooks.first["matcher"]
-      assert_equal ".claude/hooks/informant-alerts.sh", hooks.first.dig("hooks", 0, "command")
+      assert_equal Content::HOOK_COMMAND, hooks.first.dig("hooks", 0, "command")
       assert_equal 10, hooks.first.dig("hooks", 0, "timeout")
+    end
+  end
+
+  test "registers the hook as an absolute path so it resolves whatever the hook's cwd is" do
+    run_generator
+
+    assert_file ".claude/settings.json" do |content|
+      command = JSON.parse(content).dig("hooks", "UserPromptSubmit", 0, "hooks", 0, "command")
+      assert_equal %("$CLAUDE_PROJECT_DIR"/.claude/hooks/informant-alerts.sh), command
+    end
+  end
+
+  test "migrates a legacy bare-relative registration to the absolute form without duplicating" do
+    write_settings "hooks" => { "UserPromptSubmit" => [ legacy_informant_hook_entry ] }
+
+    run_generator
+
+    assert_file ".claude/settings.json" do |content|
+      hooks = JSON.parse(content).dig("hooks", "UserPromptSubmit")
+      assert_equal 1, hooks.length, "the legacy entry must be replaced, not appended to"
+      assert_equal Content::HOOK_COMMAND, hooks.first.dig("hooks", 0, "command")
     end
   end
 
@@ -76,7 +98,7 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       # New hook added
       prompt_hooks = settings.dig("hooks", "UserPromptSubmit")
       assert_equal 1, prompt_hooks.length
-      assert_equal ".claude/hooks/informant-alerts.sh", prompt_hooks.first.dig("hooks", 0, "command")
+      assert_equal Content::HOOK_COMMAND, prompt_hooks.first.dig("hooks", 0, "command")
     end
   end
 
@@ -124,7 +146,7 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       assert_nil settings.dig("hooks", "SessionStart"), "the stale SessionStart key should be gone"
       user_prompt_submit = settings.dig("hooks", "UserPromptSubmit")
       assert_equal 1, user_prompt_submit.length
-      assert_equal ".claude/hooks/informant-alerts.sh", user_prompt_submit.first.dig("hooks", 0, "command")
+      assert_equal Content::HOOK_COMMAND, user_prompt_submit.first.dig("hooks", 0, "command")
     end
   end
 
@@ -186,15 +208,17 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       hooks = JSON.parse(content).dig("hooks", "UserPromptSubmit")
       assert_kind_of Array, hooks
       assert_equal 1, hooks.length
-      assert_equal ".claude/hooks/informant-alerts.sh", hooks.first.dig("hooks", 0, "command")
+      assert_equal Content::HOOK_COMMAND, hooks.first.dig("hooks", 0, "command")
     end
   end
 
   private
 
-  def informant_hook_entry
-    { "hooks" => [ { "type" => "command", "command" => ".claude/hooks/informant-alerts.sh", "timeout" => 10 } ] }
+  def informant_hook_entry(command = Content::HOOK_COMMAND)
+    { "hooks" => [ { "type" => "command", "command" => command, "timeout" => 10 } ] }
   end
+
+  def legacy_informant_hook_entry = informant_hook_entry(Content::HOOK_SCRIPT_PATH)
 
   def write_settings(data)
     mkdir_p ".claude"
