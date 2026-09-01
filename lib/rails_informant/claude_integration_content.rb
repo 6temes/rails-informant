@@ -15,8 +15,16 @@ module RailsInformant
     MCP_PATH = ".mcp.json"
 
     # The command string a settings.json hook entry uses to invoke the script.
-    # Match-by-path detection keys on this value across every event key.
-    HOOK_COMMAND = HOOK_SCRIPT_PATH
+    # Absolute via Claude Code's $CLAUDE_PROJECT_DIR because the hook's cwd is
+    # not guaranteed to be the app root: a bare relative path fails on every
+    # prompt with "No such file or directory". Quoted as written — the expansion
+    # can contain spaces.
+    HOOK_COMMAND = %("$CLAUDE_PROJECT_DIR"/#{HOOK_SCRIPT_PATH})
+
+    # Every command form informant has ever written. Match-by-path detection
+    # keys on this list across every event key, so a re-run migrates an install
+    # registered by an older gem instead of appending a second entry beside it.
+    HOOK_COMMANDS = [ HOOK_COMMAND, HOOK_SCRIPT_PATH ].freeze
 
     # The event key the current gem registers the hook under.
     HOOK_EVENT = "UserPromptSubmit"
@@ -70,7 +78,7 @@ module RailsInformant
     # registrations) and detection (to extract the informant fragment).
     def informant_hook_entry?(entry)
       entry.is_a?(Hash) && Array(entry["hooks"]).any? do |hook|
-        hook.is_a?(Hash) && hook["command"] == HOOK_COMMAND
+        hook.is_a?(Hash) && HOOK_COMMANDS.include?(hook["command"])
       end
     end
   end
