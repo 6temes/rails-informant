@@ -28,7 +28,7 @@ class RailsInformant::BreadcrumbSubscriberTest < ActiveSupport::TestCase
     RailsInformant.stubs(:initialized?).returns(true)
     RailsInformant::BreadcrumbBuffer.current.flush
 
-    ActiveSupport::Notifications.instrument("sql.active_record", name: "User Load", cached: true) do
+    ActiveSupport::Notifications.instrument("sql.active_record", sql: "SELECT \"users\".* FROM \"users\"", name: "User Load", cached: true) do
       # simulated cached query
     end
 
@@ -41,7 +41,7 @@ class RailsInformant::BreadcrumbSubscriberTest < ActiveSupport::TestCase
     RailsInformant.stubs(:initialized?).returns(true)
     RailsInformant::BreadcrumbBuffer.current.flush
 
-    ActiveSupport::Notifications.instrument("sql.active_record", name: "SCHEMA") do
+    ActiveSupport::Notifications.instrument("sql.active_record", sql: "PRAGMA table_info(\"users\")", name: "SCHEMA") do
       # simulated schema query
     end
 
