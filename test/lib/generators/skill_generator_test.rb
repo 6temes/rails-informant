@@ -26,6 +26,29 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
     assert_predicate frontmatter["description"].to_s.strip, :present?
   end
 
+  test "leaves the skill to Hyperdrive when the app is Hyperdrive-managed" do
+    write_hyperdrive_config
+
+    output = run_generator
+
+    assert_no_file Content::SKILL_PATH
+    assert_file Content::HOOK_SCRIPT_PATH
+    assert_file Content::SETTINGS_PATH
+    assert_file Content::MCP_PATH
+    assert_match "hyperdrive:sync", output
+    assert_no_match "Created #{Content::SKILL_PATH}", output
+  end
+
+  test "does not touch an existing skill file in a Hyperdrive-managed app" do
+    write_hyperdrive_config
+    mkdir_p File.dirname(Content::SKILL_PATH)
+    File.write File.join(destination_root, Content::SKILL_PATH), "edited by hand\n"
+
+    run_generator
+
+    assert_file Content::SKILL_PATH, "edited by hand\n"
+  end
+
   test "creates hook script with executable permissions" do
     run_generator
 
@@ -232,6 +255,11 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
   def write_settings(data)
     mkdir_p ".claude"
     File.write File.join(destination_root, ".claude/settings.json"), JSON.pretty_generate(data)
+  end
+
+  def write_hyperdrive_config
+    mkdir_p ".hyperdrive"
+    File.write File.join(destination_root, Content::HYPERDRIVE_CONFIG_PATH), "disabled: {}\n"
   end
 
   def mkdir_p(relative_path)
