@@ -231,6 +231,14 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
       "the generator's output must match the installed gem's expected content"
   end
 
+  test "generated integration is current in a Hyperdrive-managed app" do
+    write_hyperdrive_config
+
+    run_generator
+
+    assert_equal :current, RailsInformant::Integration.new(app_root: destination_root).status
+  end
+
   test "coerces a hand-written non-array event value instead of crashing" do
     write_settings "hooks" => { "UserPromptSubmit" => { "type" => "command" } }
 

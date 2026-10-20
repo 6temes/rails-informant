@@ -2,6 +2,7 @@ require "digest"
 require "fileutils"
 require "json"
 require "pathname"
+require "yaml"
 require "rails_informant/claude_integration_content"
 
 module RailsInformant
@@ -24,6 +25,7 @@ module RailsInformant
 
     def initialize(app_root: Rails.root)
       @app_root = Pathname(app_root)
+      @hyperdrive_managed = Content.hyperdrive_managed?(@app_root)
     end
 
     # :not_installed | :current | :stale | :error
@@ -45,6 +47,16 @@ module RailsInformant
 
     def stale?
       status == :stale
+    end
+
+    # A skill sitting at the Hyperdrive install path that Hyperdrive does not
+    # own: a generator-written copy (no lock entry, so sync skips it as a local
+    # edit) or one whose update sync parked in a .new sidecar. A lock-SHA
+    # mismatch alone is not enough: that is also a legitimate local edit.
+    def skill_awaiting_hyperdrive?
+      return false unless @hyperdrive_managed && skill_path.exist?
+
+      sidecar_path.exist? || !informant_skill_locked?
     end
 
     # Display only — the drift decision uses the digest, not the version. Harmless
@@ -79,6 +91,8 @@ module RailsInformant
     def skill_path = @app_root.join(Content::SKILL_PATH)
     def settings_path = @app_root.join(Content::SETTINGS_PATH)
     def mcp_path = @app_root.join(Content::MCP_PATH)
+    def sidecar_path = @app_root.join("#{Content::SKILL_PATH}.new")
+    def lock_path = @app_root.join(".hyperdrive", "lock.yml")
 
     def hook_script_present? = hook_path.exist?
 
@@ -100,7 +114,7 @@ module RailsInformant
     def expected_digest
       digest_of(
         "hook" => normalize_text(Content.hook_script),
-        "skill" => normalize_text(Content.skill_markdown),
+        "skill" => @hyperdrive_managed ? "" : normalize_text(Content.skill_markdown),
         "settings" => canonical_json(Content.expected_registrations),
         "mcp" => canonical_json(Content.mcp_entry)
       )
@@ -109,7 +123,7 @@ module RailsInformant
     def live_digest
       digest_of(
         "hook" => normalize_text(read_or_empty(hook_path)),
-        "skill" => normalize_text(read_or_empty(skill_path)),
+        "skill" => @hyperdrive_managed ? "" : normalize_text(read_or_empty(skill_path)),
         "settings" => canonical_json(live_settings_registrations || {}),
         "mcp" => canonical_json(live_mcp_entry || {})
       )
@@ -141,6 +155,21 @@ module RailsInformant
     def live_mcp_entry
       mcp = parsed_json(mcp_path) or return nil
       mcp.dig "mcpServers", "informant"
+    end
+
+    def informant_skill_locked?
+      Array(lock_files).any? do |entry|
+        entry.is_a?(Hash) && entry["artifact"] == "skill" && entry["source"].to_s.start_with?("rails-informant@")
+      end
+    end
+
+    def lock_files
+      return unless lock_path.exist?
+
+      lock = YAML.safe_load(lock_path.read)
+      lock["files"] if lock.is_a?(Hash)
+    rescue Psych::Exception
+      nil
     end
 
     # --- json / text helpers ------------------------------------------------
