@@ -43,3 +43,6 @@ jobs:
 
       - name: Run tests
         run: bundle exec rake test
+
+      - name: Check Hyperdrive companion content
+        run: bundle exec rake hyperdrive:skills:check hyperdrive:manifest:check
