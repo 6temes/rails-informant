@@ -48,7 +48,7 @@ module RailsInformant
     end
 
     def skill_markdown
-      File.read File.join(templates_dir, "SKILL.md")
+      File.read File.join(gem_dir, "skills", "informant", "SKILL.md")
     end
 
     # The informant server entry inside .mcp.json's "mcpServers".

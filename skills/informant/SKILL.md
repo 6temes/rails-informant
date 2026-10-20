@@ -1,4 +1,6 @@
 ---
+name: informant
+description: Triage and fix production errors captured by Rails Informant, using its MCP tools.
 disable-model-invocation: true
 allowed-tools:
   - mcp__informant__*

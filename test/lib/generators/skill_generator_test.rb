@@ -11,10 +11,19 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
     prepare_destination
   end
 
-  test "creates skill file" do
+  test "writes the shipped skill byte for byte" do
     run_generator
 
-    assert_file ".claude/skills/informant/SKILL.md"
+    assert_file Content::SKILL_PATH do |content|
+      assert_equal Content.skill_markdown, content
+    end
+  end
+
+  test "the shipped skill carries the frontmatter Hyperdrive discovery requires" do
+    frontmatter = YAML.safe_load Content.skill_markdown[/\A---\n(.*?)\n---\n/m, 1]
+
+    assert_equal "informant", frontmatter["name"]
+    assert_predicate frontmatter["description"].to_s.strip, :present?
   end
 
   test "creates hook script with executable permissions" do

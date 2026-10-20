@@ -13,6 +13,7 @@ Gem::Specification.new do |spec|
   spec.metadata = {
     "bug_tracker_uri" => "https://github.com/6temes/rails-informant/issues",
     "changelog_uri" => "https://github.com/6temes/rails-informant/releases",
+    "hyperdrive_targets" => "rails-informant",
     "rubygems_mfa_required" => "true",
     "source_code_uri" => "https://github.com/6temes/rails-informant"
   }
@@ -20,7 +21,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 4.0"
 
   spec.files = Dir.chdir(__dir__) do
-    Dir["{app,config,db,exe,lib}/**/*", "LICENSE", "Rakefile", "README.md"]
+    Dir["{app,config,db,exe,lib,skills}/**/*", "LICENSE", "Rakefile", "README.md"]
   end
 
   spec.bindir = "exe"

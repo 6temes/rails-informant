@@ -9,7 +9,7 @@ module RailsInformant
     source_root File.expand_path("skill/templates", __dir__)
 
     def copy_skill_file
-      copy_file "SKILL.md", ".claude/skills/informant/SKILL.md"
+      create_file Content::SKILL_PATH, Content.skill_markdown
     end
 
     def copy_hook_script
