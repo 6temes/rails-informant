@@ -49,12 +49,15 @@ module RailsInformant
       status == :stale
     end
 
-    # Not keyed on a lock-SHA mismatch: that is also a legitimate local edit of
-    # a Hyperdrive-owned skill, which the handover would discard.
+    # Never true for a skill Hyperdrive already owns: a lock-SHA mismatch is a
+    # local edit, and a sidecar with a recorded ancestor is Hyperdrive's own
+    # upgrade of that edit (hyperdrive:sync --resolve). The handover would
+    # discard the edit in both cases.
     def skill_awaiting_hyperdrive?
       return false unless @hyperdrive_managed && skill_path.exist?
 
-      sidecar_path.exist? || !informant_skill_locked?
+      entry = informant_skill_entry or return true
+      sidecar_path.exist? && entry["ancestor_sha"].nil?
     end
 
     # Display only — the drift decision uses the digest, not the version. Harmless
@@ -155,8 +158,8 @@ module RailsInformant
       mcp.dig "mcpServers", "informant"
     end
 
-    def informant_skill_locked?
-      Array(lock_files).any? do |entry|
+    def informant_skill_entry
+      Array(lock_files).find do |entry|
         entry["artifact"] == "skill" && entry["source"].to_s.start_with?("rails-informant@")
       end
     end

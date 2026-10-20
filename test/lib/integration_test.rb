@@ -169,6 +169,15 @@ class RailsInformant::IntegrationTest < ActiveSupport::TestCase
     assert integration.skill_awaiting_hyperdrive?
   end
 
+  test "a sidecar from Hyperdrive's own upgrade of an edited skill does not await adoption" do
+    install_current
+    write_hyperdrive_config
+    write_lock informant_lock_entry.merge("ancestor_source" => "rails-informant@1.1.0", "ancestor_sha" => "def")
+    @app_root.join("#{Content::SKILL_PATH}.new").write Content.skill_markdown
+
+    assert_not integration.skill_awaiting_hyperdrive?
+  end
+
   test "an unparseable lock awaits adoption without raising" do
     install_current
     write_hyperdrive_config
