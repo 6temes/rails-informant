@@ -49,10 +49,8 @@ module RailsInformant
       status == :stale
     end
 
-    # A skill sitting at the Hyperdrive install path that Hyperdrive does not
-    # own: a generator-written copy (no lock entry, so sync skips it as a local
-    # edit) or one whose update sync parked in a .new sidecar. A lock-SHA
-    # mismatch alone is not enough: that is also a legitimate local edit.
+    # Not keyed on a lock-SHA mismatch: that is also a legitimate local edit of
+    # a Hyperdrive-owned skill, which the handover would discard.
     def skill_awaiting_hyperdrive?
       return false unless @hyperdrive_managed && skill_path.exist?
 
@@ -92,7 +90,7 @@ module RailsInformant
     def settings_path = @app_root.join(Content::SETTINGS_PATH)
     def mcp_path = @app_root.join(Content::MCP_PATH)
     def sidecar_path = @app_root.join("#{Content::SKILL_PATH}.new")
-    def lock_path = @app_root.join(".hyperdrive", "lock.yml")
+    def lock_path = @app_root.join(Content::HYPERDRIVE_LOCK_PATH)
 
     def hook_script_present? = hook_path.exist?
 
@@ -159,7 +157,7 @@ module RailsInformant
 
     def informant_skill_locked?
       Array(lock_files).any? do |entry|
-        entry.is_a?(Hash) && entry["artifact"] == "skill" && entry["source"].to_s.start_with?("rails-informant@")
+        entry["artifact"] == "skill" && entry["source"].to_s.start_with?("rails-informant@")
       end
     end
 

@@ -1,8 +1,6 @@
 require "test_helper"
 require "rails/hyperdrive/bundler_artifact_discovery"
 
-# Runs Hyperdrive's own discovery over this gem, so a skill it would silently
-# skip (missing frontmatter, a moved file) fails here instead of in host apps.
 class RailsInformant::HyperdriveDiscoveryTest < ActiveSupport::TestCase
   Discovery = Rails::Hyperdrive::BundlerArtifactDiscovery
 

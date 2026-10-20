@@ -19,6 +19,7 @@ module RailsInformant
     # generator write the skill in that window, and Hyperdrive treats an
     # unlocked file as a local edit it never overwrites.
     HYPERDRIVE_CONFIG_PATH = ".hyperdrive/config.yml"
+    HYPERDRIVE_LOCK_PATH = ".hyperdrive/lock.yml"
 
     # The command string a settings.json hook entry uses to invoke the script.
     # Absolute via Claude Code's $CLAUDE_PROJECT_DIR because the hook's cwd is
