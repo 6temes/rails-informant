@@ -14,6 +14,13 @@ module RailsInformant
     SETTINGS_PATH = ".claude/settings.json"
     MCP_PATH = ".mcp.json"
 
+    # `hyperdrive:init` writes this before the first sync, so the skill is left
+    # to Hyperdrive from the start. Keying on the lock instead would let the
+    # generator write the skill in that window, and Hyperdrive treats an
+    # unlocked file as a local edit it never overwrites.
+    HYPERDRIVE_CONFIG_PATH = ".hyperdrive/config.yml"
+    HYPERDRIVE_LOCK_PATH = ".hyperdrive/lock.yml"
+
     # The command string a settings.json hook entry uses to invoke the script.
     # Absolute via Claude Code's $CLAUDE_PROJECT_DIR because the hook's cwd is
     # not guaranteed to be the app root: a bare relative path fails on every
@@ -48,8 +55,10 @@ module RailsInformant
     end
 
     def skill_markdown
-      File.read File.join(templates_dir, "SKILL.md")
+      File.read File.join(gem_dir, "skills", "informant", "SKILL.md")
     end
+
+    def hyperdrive_managed?(app_root) = File.exist?(File.join(app_root, HYPERDRIVE_CONFIG_PATH))
 
     # The informant server entry inside .mcp.json's "mcpServers".
     def mcp_entry

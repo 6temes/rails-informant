@@ -63,6 +63,8 @@ Install Claude Code integration:
 bin/rails generate rails_informant:skill
 ```
 
+With [Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive), the `/informant` skill arrives through `bin/rails hyperdrive:sync` instead, and the generator installs the rest (see [With Rails Hyperdrive](#with-rails-hyperdrive)).
+
 Errors are captured automatically. To capture manually:
 
 ```ruby
@@ -221,6 +223,19 @@ bin/rails informant:doctor   # reports current / stale / not installed; exits no
 ```
 
 Apps that use the gem only for error capture (no Claude Code integration) are never affected.
+
+#### With Rails Hyperdrive
+
+rails-informant is a Hyperdrive companion gem. Once an app has `.hyperdrive/config.yml`, Hyperdrive owns the skill (`.claude/skills/informant/SKILL.md`) and updates it on `bin/rails hyperdrive:sync`, keeping your local edits safe. The generator still owns the hook script, its `.claude/settings.json` entry and `.mcp.json`, and no longer writes the skill. The drift checks ignore the skill in these apps.
+
+If the generator installed the skill before Hyperdrive arrived, hand it over once:
+
+```sh
+rm -f .claude/skills/informant/SKILL.md .claude/skills/informant/SKILL.md.new
+bin/rails hyperdrive:sync
+```
+
+Hyperdrive treats a file it did not install as a local edit and never overwrites it, so the old copy has to go first. Avoid `hyperdrive:sync --overwrite` for this: it rewrites every locally edited Hyperdrive file, from every companion gem. `bin/rails informant:doctor` prints these steps while the handover is pending.
 
 ### Tools
 

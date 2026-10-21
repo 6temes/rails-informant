@@ -6,6 +6,13 @@ module RailsInformant
   # or error) so it doubles as a CI signal. A thin wrapper over Integration that
   # never raises out — a diagnostic must not crash the run it reports on.
   class Doctor
+    HYPERDRIVE_ADOPTION = <<~REPORT.chomp
+      [Informant] Rails Hyperdrive manages the informant skill, but #{ClaudeIntegrationContent::SKILL_PATH} is not a Hyperdrive install.
+      Hand it over (not --overwrite, which rewrites every edited Hyperdrive file):
+        rm -f #{ClaudeIntegrationContent::SKILL_PATH} #{ClaudeIntegrationContent::SKILL_PATH}.new
+        bin/rails hyperdrive:sync
+    REPORT
+
     def initialize(integration: Integration.new, io: $stdout)
       @integration = integration
       @io = io
@@ -15,6 +22,7 @@ module RailsInformant
       status = @integration.status
       @integration.write_drift_flag stale: status == :stale
       @io.puts report_for(status)
+      @io.puts HYPERDRIVE_ADOPTION if @integration.skill_awaiting_hyperdrive?
       exit_code_for status
     rescue StandardError => e
       # An unexpected failure must exit nonzero, not 0 — a doctor wired into CI

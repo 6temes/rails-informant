@@ -38,9 +38,36 @@ class RailsInformant::DoctorTest < ActiveSupport::TestCase
     assert_equal 1, code
   end
 
+  test "names the Hyperdrive migration step when the skill awaits adoption" do
+    io = StringIO.new
+    code = doctor(:current, io, awaiting_hyperdrive: true).run
+
+    assert_match "up to date", io.string
+    assert_match "rm -f .claude/skills/informant/SKILL.md", io.string
+    assert_match "bin/rails hyperdrive:sync", io.string
+    assert_equal 0, code
+  end
+
+  test "adds the migration step to a stale report and keeps its exit code" do
+    io = StringIO.new
+    code = doctor(:stale, io, awaiting_hyperdrive: true).run
+
+    assert_match "OUT OF DATE", io.string
+    assert_match "bin/rails hyperdrive:sync", io.string
+    assert_equal 1, code
+  end
+
+  test "omits the migration step when the skill does not await adoption" do
+    io = StringIO.new
+    doctor(:current, io).run
+
+    assert_no_match "hyperdrive", io.string
+  end
+
   test "refreshes the drift flag — writes when stale" do
     stale = mock("integration")
     stale.stubs(:status).returns(:stale)
+    stale.stubs(:skill_awaiting_hyperdrive?).returns(false)
     stale.expects(:write_drift_flag).with(stale: true)
 
     RailsInformant::Doctor.new(integration: stale, io: StringIO.new).run
@@ -49,6 +76,7 @@ class RailsInformant::DoctorTest < ActiveSupport::TestCase
   test "refreshes the drift flag — clears when not stale" do
     current = mock("integration")
     current.stubs(:status).returns(:current)
+    current.stubs(:skill_awaiting_hyperdrive?).returns(false)
     current.expects(:write_drift_flag).with(stale: false)
 
     RailsInformant::Doctor.new(integration: current, io: StringIO.new).run
@@ -67,9 +95,10 @@ class RailsInformant::DoctorTest < ActiveSupport::TestCase
 
   private
 
-  def doctor(status, io)
+  def doctor(status, io, awaiting_hyperdrive: false)
     integration = mock("integration")
     integration.stubs(:status).returns(status)
+    integration.stubs(:skill_awaiting_hyperdrive?).returns(awaiting_hyperdrive)
     integration.stubs(:write_drift_flag)
     RailsInformant::Doctor.new(integration: integration, io: io)
   end

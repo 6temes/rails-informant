@@ -8,5 +8,6 @@ gemspec
 # ships the fix.
 gem "json", "< 3"
 gem "mocha"
+gem "rails-hyperdrive", require: false
 gem "rubocop-rails-omakase", require: false
 gem "sqlite3"

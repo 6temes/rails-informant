@@ -98,6 +98,103 @@ class RailsInformant::IntegrationTest < ActiveSupport::TestCase
     assert_equal :current, integration.status, "a leading BOM must normalize away"
   end
 
+  test "a skill differing from the gem is stale without Hyperdrive" do
+    install_current
+    skill_file.write "edited\n"
+
+    assert_equal :stale, integration.status
+  end
+
+  test "a skill differing from the gem is current when Hyperdrive manages it" do
+    install_current
+    write_hyperdrive_config
+    skill_file.write "edited\n"
+
+    assert_equal :current, integration.status
+  end
+
+  test "a missing skill is current when Hyperdrive manages it" do
+    install_current
+    write_hyperdrive_config
+    skill_file.delete
+
+    assert_equal :current, integration.status
+  end
+
+  test "hook drift is still stale when Hyperdrive manages the skill" do
+    install_current
+    write_hyperdrive_config
+    hook_file.write "#!/usr/bin/env bash\necho tampered\n"
+
+    assert_equal :stale, integration.status
+  end
+
+  test "a Hyperdrive-installed skill alone is not_installed" do
+    write_hyperdrive_config
+    skill_file.dirname.mkpath
+    skill_file.write Content.skill_markdown
+
+    assert_equal :not_installed, integration.status
+  end
+
+  test "an unlocked skill in a Hyperdrive app awaits adoption" do
+    install_current
+    write_hyperdrive_config
+
+    assert integration.skill_awaiting_hyperdrive?
+  end
+
+  test "a skill locked to rails-informant does not await adoption" do
+    install_current
+    write_hyperdrive_config
+    write_lock informant_lock_entry
+
+    assert_not integration.skill_awaiting_hyperdrive?
+  end
+
+  test "a lock entry for another gem does not count as adoption" do
+    install_current
+    write_hyperdrive_config
+    write_lock informant_lock_entry.merge("source" => "other-gem@1.0.0")
+
+    assert integration.skill_awaiting_hyperdrive?
+  end
+
+  test "a pending sidecar awaits adoption even with a lock entry" do
+    install_current
+    write_hyperdrive_config
+    write_lock informant_lock_entry
+    @app_root.join("#{Content::SKILL_PATH}.new").write Content.skill_markdown
+
+    assert integration.skill_awaiting_hyperdrive?
+  end
+
+  test "a sidecar from Hyperdrive's own upgrade of an edited skill does not await adoption" do
+    install_current
+    write_hyperdrive_config
+    write_lock informant_lock_entry.merge("ancestor_source" => "rails-informant@1.1.0", "ancestor_sha" => "def")
+    @app_root.join("#{Content::SKILL_PATH}.new").write Content.skill_markdown
+
+    assert_not integration.skill_awaiting_hyperdrive?
+  end
+
+  test "an unparseable lock awaits adoption without raising" do
+    install_current
+    write_hyperdrive_config
+    @app_root.join(".hyperdrive/lock.yml").write "files: [unclosed"
+
+    assert integration.skill_awaiting_hyperdrive?
+  end
+
+  test "nothing awaits adoption without Hyperdrive or without a skill file" do
+    install_current
+    assert_not integration.skill_awaiting_hyperdrive?
+
+    write_hyperdrive_config
+    skill_file.delete
+    assert_not integration.skill_awaiting_hyperdrive?
+  end
+
   test "gem_version reads from Gem.loaded_specs, not the VERSION constant" do
     spec = Gem::Specification.new { |s| s.version = "9.9.9" }
     Gem.stubs(:loaded_specs).returns("rails-informant" => spec)
@@ -163,6 +260,19 @@ class RailsInformant::IntegrationTest < ActiveSupport::TestCase
     skill_file.write Content.skill_markdown
     write_settings "hooks" => Content.expected_registrations
     write_json mcp_file, "mcpServers" => { "informant" => Content.mcp_entry }
+  end
+
+  def write_hyperdrive_config
+    @app_root.join(".hyperdrive").mkpath
+    @app_root.join(Content::HYPERDRIVE_CONFIG_PATH).write "disabled: {}\n"
+  end
+
+  def write_lock(*entries)
+    @app_root.join(".hyperdrive/lock.yml").write YAML.dump("version" => 3, "files" => entries)
+  end
+
+  def informant_lock_entry
+    { "path" => Content::SKILL_PATH, "artifact" => "skill", "source" => "rails-informant@1.2.0", "source_sha" => "abc" }
   end
 
   def write_settings(data)

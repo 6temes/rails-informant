@@ -9,7 +9,9 @@ module RailsInformant
     source_root File.expand_path("skill/templates", __dir__)
 
     def copy_skill_file
-      copy_file "SKILL.md", ".claude/skills/informant/SKILL.md"
+      return if hyperdrive_managed?
+
+      create_file Content::SKILL_PATH, Content.skill_markdown
     end
 
     def copy_hook_script
@@ -63,7 +65,11 @@ module RailsInformant
       say "Claude Code integration installed!", :green
       say ""
       say "  Created .mcp.json"
-      say "  Created .claude/skills/informant/SKILL.md"
+      if hyperdrive_managed?
+        say "  Skipped #{Content::SKILL_PATH} (Rails Hyperdrive installs it: bin/rails hyperdrive:sync)"
+      else
+        say "  Created #{Content::SKILL_PATH}"
+      end
       say "  Created .claude/hooks/informant-alerts.sh"
       say "  Created .claude/settings.json (UserPromptSubmit hook)"
       say ""
@@ -80,6 +86,8 @@ module RailsInformant
     end
 
     private
+
+    def hyperdrive_managed? = Content.hyperdrive_managed?(destination_root)
 
     # Remove every prior informant registration (matched by script path) from all
     # event keys and drop keys left empty, so a re-run migrates a stale
