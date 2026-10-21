@@ -199,6 +199,12 @@ The bundled `informant-mcp` executable connects Claude Code to your error data v
 
 The `rails_informant:skill` generator creates `.mcp.json` automatically. Set `INFORMANT_PRODUCTION_URL` and `INFORMANT_PRODUCTION_TOKEN` as environment variables (e.g., via `.envrc` + direnv).
 
+`informant-mcp` reads these variables when it starts, so a Claude Code session started without them loaded crashes the server on boot. To load `.envrc` on every start, launch the server through direnv. The generator and `informant:doctor` both accept this entry:
+
+```json
+"informant": { "command": "direnv", "args": ["exec", ".", "informant-mcp"] }
+```
+
 For multi-environment setups, add env vars for each environment:
 
 ```bash

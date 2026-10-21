@@ -25,7 +25,9 @@ module RailsInformant
       if File.exist?(mcp_path)
         existing = JSON.parse(File.read(mcp_path))
         existing["mcpServers"] ||= {}
-        existing["mcpServers"]["informant"] = Content.mcp_entry
+        unless Content.accepted_mcp_entries.include?(existing["mcpServers"]["informant"])
+          existing["mcpServers"]["informant"] = Content.mcp_entry
+        end
         create_file ".mcp.json", JSON.pretty_generate(existing) + "\n", force: true
       else
         create_file ".mcp.json", JSON.pretty_generate(
