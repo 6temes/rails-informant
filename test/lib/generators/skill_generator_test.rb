@@ -168,6 +168,29 @@ class RailsInformant::SkillGeneratorTest < Rails::Generators::TestCase
     end
   end
 
+  test "keeps an informant server launched through direnv" do
+    direnv = { "command" => "direnv", "args" => [ "exec", ".", "informant-mcp" ] }
+    File.write File.join(destination_root, ".mcp.json"), JSON.pretty_generate("mcpServers" => { "informant" => direnv })
+
+    run_generator
+
+    assert_file ".mcp.json" do |content|
+      assert_equal direnv, JSON.parse(content).dig("mcpServers", "informant")
+    end
+  end
+
+  test "replaces any other informant server command" do
+    File.write File.join(destination_root, ".mcp.json"), JSON.pretty_generate(
+      "mcpServers" => { "informant" => { "command" => "bin/informant-mcp" } }
+    )
+
+    run_generator
+
+    assert_file ".mcp.json" do |content|
+      assert_equal Content.mcp_entry, JSON.parse(content).dig("mcpServers", "informant")
+    end
+  end
+
   test "migrates a stale SessionStart informant registration to UserPromptSubmit" do
     write_settings "hooks" => { "SessionStart" => [ informant_hook_entry ] }
 

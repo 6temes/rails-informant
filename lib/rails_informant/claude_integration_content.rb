@@ -65,6 +65,13 @@ module RailsInformant
       { "command" => "informant-mcp" }
     end
 
+    # Entries an app may keep in place of mcp_entry. The direnv form loads the
+    # app's .envrc first: informant-mcp reads its URL and token at startup, so a
+    # session started without the .envrc loaded crashes it on boot.
+    def accepted_mcp_entries
+      [ mcp_entry, { "command" => "direnv", "args" => [ "exec", ".", "informant-mcp" ] } ]
+    end
+
     # A single UserPromptSubmit hook registration for settings.json.
     def hook_registration
       {

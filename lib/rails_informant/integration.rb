@@ -126,7 +126,7 @@ module RailsInformant
         "hook" => normalize_text(read_or_empty(hook_path)),
         "skill" => @hyperdrive_managed ? "" : normalize_text(read_or_empty(skill_path)),
         "settings" => canonical_json(live_settings_registrations || {}),
-        "mcp" => canonical_json(live_mcp_entry || {})
+        "mcp" => canonical_json(Content.accepted_mcp_entries.include?(live_mcp_entry) ? Content.mcp_entry : live_mcp_entry || {})
       )
     end
 

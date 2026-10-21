@@ -82,6 +82,20 @@ class RailsInformant::IntegrationTest < ActiveSupport::TestCase
     assert_equal :error, integration.status
   end
 
+  test "an informant server launched through direnv is current" do
+    install_current
+    write_json mcp_file, "mcpServers" => { "informant" => { "command" => "direnv", "args" => [ "exec", ".", "informant-mcp" ] } }
+
+    assert_equal :current, integration.status
+  end
+
+  test "any other informant server command is stale" do
+    install_current
+    write_json mcp_file, "mcpServers" => { "informant" => { "command" => "bin/informant-mcp" } }
+
+    assert_equal :stale, integration.status
+  end
+
   test "hook differing only by CRLF and trailing whitespace is current" do
     install_current
     crlf = Content.hook_script.gsub("\n", "  \r\n") + "\r\n\r\n"
