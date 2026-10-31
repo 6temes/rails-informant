@@ -1,6 +1,13 @@
 require "test_helper"
 
 class RailsInformant::EngineTest < ActiveSupport::TestCase
+  test "context middleware adds deploy_sha alongside the reported context" do
+    RailsInformant.stubs(:current_git_sha).returns("abc123")
+    RailsInformant::ErrorRecorder.expects(:record).with { |_error, context:, **| context == { tag: "probe", deploy_sha: "abc123" } }
+
+    Rails.error.report RuntimeError.new("probe"), context: { tag: "probe" }
+  end
+
   test "validate_api_token! raises in server mode when api_token is nil" do
     RailsInformant.config.capture_errors = true
     RailsInformant.config.api_token = nil

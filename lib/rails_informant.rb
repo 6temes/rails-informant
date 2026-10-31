@@ -35,6 +35,7 @@ module RailsInformant
   autoload :Event, "rails_informant/event"
   autoload :Fingerprint, "rails_informant/fingerprint"
   autoload :Integration, "rails_informant/integration"
+  autoload :JobExecutionContext, "rails_informant/job_execution_context"
   autoload :StructuredEventSubscriber, "rails_informant/structured_event_subscriber"
 
   module Middleware
@@ -173,7 +174,7 @@ module RailsInformant
       else
         head
       end
-    rescue Errno::ENOENT, Errno::EACCES, ArgumentError
+    rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, ArgumentError
       nil
     end
   end

@@ -1,6 +1,25 @@
 require "test_helper"
 
 class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
+  class ReportingJob < ActiveJob::Base
+    def perform = Rails.error.report(RuntimeError.new("reported from a job"))
+  end
+
+  class FailingJob < ActiveJob::Base
+    def perform = raise("job failed")
+  end
+
+  class InlineHelperJob < ActiveJob::Base
+    def perform = nil
+  end
+
+  class OuterJob < ActiveJob::Base
+    def perform
+      InlineHelperJob.perform_now
+      raise "outer job failed"
+    end
+  end
+
   setup do
     @subscriber = RailsInformant::ErrorSubscriber.new
   end
@@ -75,6 +94,58 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
       context: { job: { class: "MyJob", executions: 1 } }
   end
 
+  test "skips a real job's failure below attempt threshold" do
+    RailsInformant.config.job_attempt_threshold = 3
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      perform_as_worker FailingJob.new
+    end
+  end
+
+  test "records a real job's failure at attempt threshold" do
+    RailsInformant.config.job_attempt_threshold = 3
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      perform_as_worker FailingJob.new, executions: 2
+    end
+  end
+
+  # A handled report never makes the job retry, so a threshold would hide it forever
+  test "records a handled error reported from a job below attempt threshold" do
+    RailsInformant.config.job_attempt_threshold = 3
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      ReportingJob.perform_now
+    end
+  end
+
+  test "records an outer job's failure after it performed another job inline" do
+    RailsInformant.config.job_attempt_threshold = 3
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      perform_as_worker OuterJob.new, executions: 2
+    end
+
+    assert_equal "RailsInformant::ErrorSubscriberTest::OuterJob", RailsInformant::ErrorGroup.last.job_class
+  end
+
+  test "does not attribute a later report to a job performed inline earlier" do
+    Rails.application.executor.wrap do
+      InlineHelperJob.perform_now
+      Rails.error.report RuntimeError.new("later in the request")
+    end
+
+    assert_nil RailsInformant::ErrorGroup.last.job_class
+  end
+
+  test "records an error reported from inside a job with its job class" do
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      ReportingJob.perform_now
+    end
+
+    assert_equal "RailsInformant::ErrorSubscriberTest::ReportingJob", RailsInformant::ErrorGroup.last.job_class
+  end
+
   test "skips when silenced" do
     RailsInformant::Current.silenced = true
     RailsInformant::ErrorRecorder.expects(:record).never
@@ -101,6 +172,14 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
   end
 
   private
+
+  # Runs the job the way a queue worker does: inside the executor, which reports
+  # the unhandled failure. `executions` is the count before this attempt.
+  def perform_as_worker(job, executions: 0)
+    job.executions = executions
+    Rails.application.executor.wrap(source: "application.active_job") { job.perform_now }
+  rescue RuntimeError
+  end
 
   def build_error
     error = StandardError.new("boom")

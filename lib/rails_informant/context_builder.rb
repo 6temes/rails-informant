@@ -113,7 +113,11 @@ module RailsInformant
       end
 
       def extract_job_class(context)
-        context.dig(:job, :class) || context[:job_class]
+        case context[:job]
+        in ActiveJob::Base => job then job.class.name
+        in { class: String => job_class } then job_class
+        else context[:job_class]
+        end
       end
 
       def filtered_url(url)

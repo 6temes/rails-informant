@@ -11,9 +11,15 @@ module RailsInformant
     initializer "rails_informant.context_middleware" do
       next unless RailsInformant.capture_errors
 
-      Rails.error.add_middleware ->(error, context) {
+      Rails.error.add_middleware ->(error, context:, **) {
         context.merge deploy_sha: RailsInformant.current_git_sha
       }
+    end
+
+    initializer "rails_informant.job_execution_context" do
+      next unless RailsInformant.capture_errors
+
+      ActiveSupport.on_load(:active_job) { prepend RailsInformant::JobExecutionContext }
     end
 
     initializer "rails_informant.middleware" do |app|
