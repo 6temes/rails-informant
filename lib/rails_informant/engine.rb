@@ -16,6 +16,12 @@ module RailsInformant
       }
     end
 
+    initializer "rails_informant.job_execution_context" do
+      next unless RailsInformant.capture_errors
+
+      ActiveSupport.on_load(:active_job) { prepend RailsInformant::JobExecutionContext }
+    end
+
     initializer "rails_informant.middleware" do |app|
       next unless RailsInformant.capture_errors
 

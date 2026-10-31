@@ -93,7 +93,7 @@ Every option can be set via an environment variable. The initializer takes prece
 | `capture_user_email` | _(none)_ | `false` | Capture email from detected user (PII -- opt-in) |
 | `ignored_exceptions` | `INFORMANT_IGNORED_EXCEPTIONS` | `[]` | Exception classes to skip (walks cause chain) |
 | `ignored_paths` | `INFORMANT_IGNORED_PATHS` | `[]` | Request paths to skip (exact or segment match) |
-| `job_attempt_threshold` | `INFORMANT_JOB_ATTEMPT_THRESHOLD` | `nil` | Suppress job errors until Nth retry |
+| `job_attempt_threshold` | `INFORMANT_JOB_ATTEMPT_THRESHOLD` | `nil` | Suppress job failures until the Nth attempt (handled reports are always recorded) |
 | `retention_days` | `INFORMANT_RETENTION_DAYS` | `nil` | Auto-purge resolved errors after N days |
 | `slack_webhook_url` | `INFORMANT_SLACK_WEBHOOK_URL` | `nil` | Slack incoming webhook URL |
 | `spike_protection` | _(none)_ | `nil` | Rate-limit per error group: `{ threshold: 50, window: 1.minute }` |

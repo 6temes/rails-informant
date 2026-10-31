@@ -7,7 +7,7 @@ module RailsInformant
       return if handled && severity == :info
       return if source && SKIP_SOURCES.match?(source)
       return if RailsInformant::Current.silenced
-      return if below_job_attempt_threshold?(context)
+      return if !handled && below_job_attempt_threshold?(context)
       return if RailsInformant.ignored_exception?(error)
       return if RailsInformant.already_captured?(error)
 
