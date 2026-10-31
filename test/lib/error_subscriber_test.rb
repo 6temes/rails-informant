@@ -1,6 +1,10 @@
 require "test_helper"
 
 class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
+  class ReportingJob < ActiveJob::Base
+    def perform = Rails.error.report(RuntimeError.new("reported from a job"))
+  end
+
   setup do
     @subscriber = RailsInformant::ErrorSubscriber.new
   end
@@ -73,6 +77,22 @@ class RailsInformant::ErrorSubscriberTest < ActiveSupport::TestCase
     RailsInformant::ErrorRecorder.expects(:record).once
     @subscriber.report build_error, handled: false, severity: :error,
       context: { job: { class: "MyJob", executions: 1 } }
+  end
+
+  test "skips a real job's error below attempt threshold" do
+    RailsInformant.config.job_attempt_threshold = 3
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      ReportingJob.perform_now
+    end
+  end
+
+  test "records an error reported from inside a job with its job class" do
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      ReportingJob.perform_now
+    end
+
+    assert_equal "RailsInformant::ErrorSubscriberTest::ReportingJob", RailsInformant::ErrorGroup.last.job_class
   end
 
   test "skips when silenced" do

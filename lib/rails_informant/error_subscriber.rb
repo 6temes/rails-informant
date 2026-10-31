@@ -25,6 +25,8 @@ module RailsInformant
       case context
       in job: { executions: Integer => executions }
         executions < threshold
+      in job: ActiveJob::Base => job
+        job.executions < threshold
       in executions: Integer => executions
         executions < threshold
       else

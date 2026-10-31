@@ -173,7 +173,7 @@ module RailsInformant
       else
         head
       end
-    rescue Errno::ENOENT, Errno::EACCES, ArgumentError
+    rescue Errno::ENOENT, Errno::EACCES, Errno::ENOTDIR, ArgumentError
       nil
     end
   end

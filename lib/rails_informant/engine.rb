@@ -11,7 +11,7 @@ module RailsInformant
     initializer "rails_informant.context_middleware" do
       next unless RailsInformant.capture_errors
 
-      Rails.error.add_middleware ->(error, context) {
+      Rails.error.add_middleware ->(error, context:, **) {
         context.merge deploy_sha: RailsInformant.current_git_sha
       }
     end

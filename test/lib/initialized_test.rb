@@ -94,6 +94,16 @@ class RailsInformant::InitializedTest < ActiveSupport::TestCase
     end
   end
 
+  test "current_git_sha returns nil when .git is a file, as in a worktree" do
+    with_env({}) do
+      with_app_root do |fake_root|
+        File.write fake_root.join(".git"), "gitdir: /elsewhere/.git/worktrees/feature\n"
+
+        assert_nil RailsInformant.current_git_sha
+      end
+    end
+  end
+
   test "current_git_sha rejects path traversal in ref" do
     RailsInformant.reset_caches!
 
