@@ -6,7 +6,7 @@ module RailsInformant
     ANONYMOUS_NAMES = [ "", ANONYMOUS, "global code", "module code" ].freeze
     APP_SOURCE_PREFIX = "app/javascript/"
     # Same rule as Propshaft::Asset.extract_path_and_digest, which only exists when the host loads Propshaft.
-    DIGEST_PATTERN = /-([0-9a-zA-Z]{7,128})\.(?!digested)([^.]|.map)+\z/
+    DIGEST_PATTERN = /-([0-9a-zA-Z]{7,128})\.(?!digested)(?:[^.]|\.map)+\z/
     FIREFOX_FRAME = /\A\s*(?<function>[^@]*)@(?<url>.+):(?<line>\d+):(?<column>\d+)\z/
     MAX_FRAMES = 50
     V8_FRAME = /\A\s*at (?:(?<function>.+?) \()?(?<url>\S+?):(?<line>\d+):(?<column>\d+)\)?\z/
