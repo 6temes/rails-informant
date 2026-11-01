@@ -23,8 +23,8 @@ module RailsInformant
         validate_url!
       end
 
-      def list_errors(status: nil, error_class: nil, q: nil, since: nil, page: nil, per_page: nil, controller_action: nil, job_class: nil, severity: nil, **extra)
-        params = { controller_action:, error_class:, job_class:, q:, severity:, since:, status:, page:, per_page: }
+      def list_errors(status: nil, error_class: nil, q: nil, since: nil, page: nil, per_page: nil, controller_action: nil, job_class: nil, severity: nil, source: nil, **extra)
+        params = { controller_action:, error_class:, job_class:, q:, severity:, since:, source:, status:, page:, per_page: }
         params[:until] = extra[:until] if extra[:until]
         perform :get, "#{@path_prefix}/api/v1/errors", params: params.compact
       end
@@ -49,8 +49,8 @@ module RailsInformant
         perform :patch, "#{@path_prefix}/api/v1/errors/#{Integer(id)}/duplicate", body: { duplicate_of_id: }
       end
 
-      def list_occurrences(error_group_id: nil, since: nil, page: nil, per_page: nil, **extra)
-        params = { error_group_id:, since:, page:, per_page: }
+      def list_occurrences(error_group_id: nil, request_id: nil, since: nil, page: nil, per_page: nil, **extra)
+        params = { error_group_id:, request_id:, since:, page:, per_page: }
         params[:until] = extra[:until] if extra[:until]
         perform :get, "#{@path_prefix}/api/v1/occurrences", params: params.compact
       end

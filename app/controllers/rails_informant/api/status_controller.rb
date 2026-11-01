@@ -10,11 +10,23 @@ module RailsInformant
           resolved_count: counts.fetch("resolved", 0),
           unresolved_count: counts.fetch("unresolved", 0),
           deploy_sha: RailsInformant.current_git_sha,
-          top_errors: top_errors
+          top_errors: top_errors,
+          **browser_group_limit
         }
       end
 
       private
+
+      # Same query the recorder uses to enforce the cap, so an agent seeing
+      # the count at the limit knows new browser groups are being dropped.
+      def browser_group_limit
+        return {} unless RailsInformant.config.capture_browser_errors
+
+        {
+          browser_groups_created_this_hour: ErrorGroup.where(source: "browser", created_at: 1.hour.ago..).count,
+          browser_new_group_limit: RailsInformant.config.browser_new_group_limit
+        }
+      end
 
       def top_errors
         ErrorGroup

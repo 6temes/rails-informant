@@ -10,6 +10,7 @@ module RailsInformant
           .by_error_class(params[:error_class])
           .by_job_class(params[:job_class])
           .by_severity(params[:severity])
+          .by_source(params[:source])
           .by_status(params[:status])
           .search(params[:q])
           .since(params[:since] && parse_time(params[:since]))

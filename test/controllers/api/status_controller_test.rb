@@ -29,4 +29,26 @@ class RailsInformant::Api::StatusControllerTest < ActionDispatch::IntegrationTes
     body = JSON.parse(response.body)
     assert_equal 5, body["top_errors"].size
   end
+
+  test "reports the browser new-group cap when browser capture is on" do
+    RailsInformant.config.capture_browser_errors = true
+    RailsInformant.config.browser_new_group_limit = 10
+    2.times { |i| create_error_group(fingerprint: "browser-#{i}", source: "browser") }
+    create_error_group(fingerprint: "browser-old", source: "browser", created_at: 2.hours.ago)
+    create_error_group(fingerprint: "server-fp")
+
+    get "/informant/api/v1/status", headers: @headers
+
+    body = JSON.parse(response.body)
+    assert_equal 2, body["browser_groups_created_this_hour"]
+    assert_equal 10, body["browser_new_group_limit"]
+  end
+
+  test "omits the browser new-group cap when browser capture is off" do
+    get "/informant/api/v1/status", headers: @headers
+
+    body = JSON.parse(response.body)
+    assert_not body.key?("browser_groups_created_this_hour")
+    assert_not body.key?("browser_new_group_limit")
+  end
 end

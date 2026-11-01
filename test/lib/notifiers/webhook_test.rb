@@ -25,6 +25,17 @@ class RailsInformant::Notifiers::WebhookTest < ActiveSupport::TestCase
     assert_nil payload["occurrence"]
   end
 
+  test "payload includes the group's source" do
+    group = create_error_group(error_class: "JS::TypeError", source: "browser")
+    occurrence = group.occurrences.create!(backtrace: [ "app.js:1:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    assert_equal "browser", JSON.parse(stub_http.captured_request.body)["source"]
+  end
+
   test "excludes PII from payload" do
     group = create_error_group
     occurrence = group.occurrences.create!(

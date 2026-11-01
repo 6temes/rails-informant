@@ -10,9 +10,11 @@ module RailsInformant
       environment_context
       error_group_id
       exception_chain
+      failing_request_id
       git_sha
       id
       request_context
+      request_id
       updated_at
       user_context
     ].freeze

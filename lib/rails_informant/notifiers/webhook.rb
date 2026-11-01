@@ -18,6 +18,7 @@ module RailsInformant
           fingerprint: error_group.fingerprint,
           message: error_group.message,
           severity: error_group.severity,
+          source: error_group.source,
           status: error_group.status,
           total_occurrences: error_group.total_occurrences,
           controller_action: error_group.controller_action,

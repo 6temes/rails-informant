@@ -56,6 +56,20 @@ class RailsInformant::Api::OccurrencesControllerTest < ActionDispatch::Integrati
     assert_not_includes ids, @occurrence.id
   end
 
+  test "filters by request_id across the server and browser occurrences of one request" do
+    server = create_occurrence(error_group: @group, request_id: "req-500")
+    browser_group = create_error_group(fingerprint: "browser-fp", error_class: "JS::TypeError", source: "browser")
+    browser = create_occurrence(error_group: browser_group, request_id: "req-render", failing_request_id: "req-500")
+
+    get "/informant/api/v1/occurrences", params: { request_id: "req-500" }, headers: @headers
+    assert_response :ok
+
+    data = JSON.parse(response.body)["data"]
+    assert_equal [ browser.id, server.id ].sort, data.map { it["id"] }.sort
+    assert_equal "req-500", data.find { it["id"] == server.id }["request_id"]
+    assert_equal "req-500", data.find { it["id"] == browser.id }["failing_request_id"]
+  end
+
   test "paginates results" do
     3.times { @group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ]) }
 
