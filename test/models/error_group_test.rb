@@ -246,7 +246,7 @@ class RailsInformant::ErrorGroupTest < ActiveSupport::TestCase
     assert group.rendered_before_resolution?(group.resolved_at)
     assert group.rendered_before_resolution?(2.hours.ago)
     assert_not group.rendered_before_resolution?(1.minute.ago)
-    assert_not group.rendered_before_resolution?(nil)
+    assert group.rendered_before_resolution?(nil)
     assert_not create_error_group.rendered_before_resolution?(2.hours.ago)
   end
 

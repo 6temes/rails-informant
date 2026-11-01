@@ -55,7 +55,7 @@ module RailsInformant
         attrs[:severity] = event.severity if %w[error warning info].include?(event.severity)
         return if browser_group_limit_reached?(event.fingerprint)
 
-        record_group(event.fingerprint, attrs, rendered_at: context&.rendered_at) { browser_report.occurrence_attributes }
+        record_group(event.fingerprint, attrs, page_rendered_at: context&.rendered_at, browser: true) { browser_report.occurrence_attributes }
       rescue StandardError => e
         log_capture_failure e
       ensure
@@ -64,9 +64,9 @@ module RailsInformant
 
       private
 
-      def record_group(fingerprint, attrs, rendered_at: nil, &occurrence_attributes)
+      def record_group(fingerprint, attrs, browser: false, page_rendered_at: nil, &occurrence_attributes)
         group = ErrorGroup.find_or_create_for(fingerprint, attrs)
-        stale_page = group.rendered_before_resolution?(rendered_at)
+        stale_page = browser && group.rendered_before_resolution?(page_rendered_at)
         group.detect_regression! unless stale_page
 
         return if spike_limit_exceeded?(group)

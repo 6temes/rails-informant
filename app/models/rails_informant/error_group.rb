@@ -134,8 +134,10 @@ module RailsInformant
 
     # A page rendered before the group was resolved is still running the code
     # the fix replaced, so its errors are not evidence the fix failed.
+    # A page with no verified render time could be a forged report, so only a
+    # page the server vouches for as newer than the fix may reopen the group.
     def rendered_before_resolution?(rendered_at)
-      status == "resolved" && rendered_at.present? && rendered_at <= resolved_at
+      status == "resolved" && (rendered_at.nil? || rendered_at <= resolved_at)
     end
 
     def detect_regression!

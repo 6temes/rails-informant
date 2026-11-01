@@ -566,6 +566,19 @@ class RailsInformant::ErrorRecorderBrowserTest < ActiveSupport::TestCase
     assert_equal "abc1234", RailsInformant::Occurrence.last.git_sha
   end
 
+  test "a report without a verified render time cannot reopen a resolved group" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser
+    group = RailsInformant::ErrorGroup.last
+    group.update_columns status: "resolved", resolved_at: 1.hour.ago, last_occurrence_stored_at: 1.minute.ago
+
+    assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+      record_browser(context: nil)
+    end
+
+    assert_equal "resolved", group.reload.status
+  end
+
   test "a page rendered after the resolution reopens the group and notifies" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
     record_browser
