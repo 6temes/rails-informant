@@ -29,24 +29,75 @@ module RailsInformant
         event = run_before_record_callbacks(error, attrs, env:, fingerprint:)
         return if event.halted?
 
-        fingerprint = event.fingerprint
         attrs[:severity] = event.severity if %w[error warning info].include?(event.severity)
 
-        group = ErrorGroup.find_or_create_for(fingerprint, attrs)
-        group.detect_regression!
-
-        return if spike_limit_exceeded?(group)
-
-        store_occurrence(group, error, env:, context:) if should_store_occurrence?(group)
-        notify(group)
+        record_group(event.fingerprint, attrs) { ContextBuilder.occurrence_attributes(error, env:, context:) }
       rescue StandardError => e
-        Rails.logger.error "[RailsInformant] Capture failed: #{e.class}: #{e.message}\n#{e.backtrace&.first(5)&.join("\n")}"
+        log_capture_failure e
+      end
+
+      # Called by the browser ingest endpoint once per report. The ingest
+      # request's own env, params and breadcrumbs describe the endpoint, not
+      # the page, so none of them reach the stored group or occurrence.
+      def record_browser(report, context:, base_url:, remote_ip:, user_agent:)
+        return unless RailsInformant.initialized?
+
+        browser_report = BrowserReport.new(report, context:, base_url:, remote_ip:, user_agent:)
+        return if RailsInformant.ignored_request_path?(browser_report.page_path)
+        return if RailsInformant.ignored_error_class?(browser_report.error_class)
+
+        attrs = browser_report.group_attributes(now: Time.current)
+        fingerprint = BrowserFingerprint.generate(error_class: attrs[:error_class], message: attrs[:message], stack: browser_report.stack)
+
+        event = run_before_record_callbacks(browser_report.error, attrs, fingerprint:, request_path: browser_report.page_path, source: "browser")
+        return if event.halted?
+
+        attrs[:severity] = event.severity if %w[error warning info].include?(event.severity)
+        return if browser_group_limit_reached?(event.fingerprint)
+
+        record_group(event.fingerprint, attrs, rendered_at: context&.rendered_at) { browser_report.occurrence_attributes }
+      rescue StandardError => e
+        log_capture_failure e
+      ensure
+        BreadcrumbBuffer.current.flush
       end
 
       private
 
-      def run_before_record_callbacks(error, attrs, env:, fingerprint:)
-        event = Event.new(error, attrs, env:, fingerprint:)
+      def record_group(fingerprint, attrs, rendered_at: nil, &occurrence_attributes)
+        group = ErrorGroup.find_or_create_for(fingerprint, attrs)
+        stale_page = group.rendered_before_resolution?(rendered_at)
+        group.detect_regression! unless stale_page
+
+        return if spike_limit_exceeded?(group)
+
+        store_occurrence(group, occurrence_attributes) if should_store_occurrence?(group)
+        # The group stays resolved, so the notification policy would
+        # otherwise alert on an error the fix already addressed.
+        notify(group) unless stale_page
+      end
+
+      # A DB count rather than a process counter, so the cap holds across
+      # workers and under a null cache store.
+      def browser_group_limit_reached?(fingerprint)
+        return false if ErrorGroup.exists?(fingerprint:)
+
+        limit = RailsInformant.config.browser_new_group_limit
+        return false if ErrorGroup.where(source: "browser", created_at: 1.hour.ago..).count < limit
+
+        unless Current.browser_group_limit_logged
+          Current.browser_group_limit_logged = true
+          Rails.logger.warn "[RailsInformant] Dropped browser report: browser_new_group_limit (#{limit}) new groups already created this hour"
+        end
+        true
+      end
+
+      def log_capture_failure(error)
+        Rails.logger.error "[RailsInformant] Capture failed: #{error.class}: #{error.message}\n#{error.backtrace&.first(5)&.join("\n")}"
+      end
+
+      def run_before_record_callbacks(error, attrs, fingerprint:, **)
+        event = Event.new(error, attrs, fingerprint:, **)
         callbacks = RailsInformant.config.before_record_callbacks
 
         callbacks.each do |callback|
@@ -89,10 +140,12 @@ module RailsInformant
       end
 
       # Detect errors caused by RailsInformant itself to prevent feedback loops.
-      # Primary: CurrentAttributes flag set during notification delivery.
+      # Primary: CurrentAttributes flags set during notification delivery and
+      # browser report ingest, where a recorded failure could amplify a flood.
       # Fallback: backtrace heuristic for cross-execution scenarios (e.g. queue retries).
       def self_caused_error?(error)
-        Current.delivering_notification || error.backtrace&.any? { it.include?("rails_informant/notifiers") }
+        Current.delivering_notification || Current.ingesting_browser_report ||
+          error.backtrace&.any? { it.include?("rails_informant/notifiers") }
       end
 
       def should_store_occurrence?(group)
@@ -101,10 +154,10 @@ module RailsInformant
         group.last_occurrence_stored_at.before?(OCCURRENCE_COOLDOWN.seconds.ago)
       end
 
-      def store_occurrence(group, error, env:, context:)
+      def store_occurrence(group, occurrence_attributes)
         now = Time.current
         ErrorGroup.transaction do
-          group.occurrences.create! ContextBuilder.occurrence_attributes(error, env:, context:)
+          group.occurrences.create! occurrence_attributes.call
           ErrorGroup.where(id: group.id).update_all last_occurrence_stored_at: now, updated_at: now
           group.last_occurrence_stored_at = now
         end

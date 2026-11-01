@@ -1,5 +1,6 @@
 require "test_helper"
 require "net/http"
+require_relative "../support/javascript_asset_stubs"
 
 class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
@@ -407,5 +408,244 @@ class RailsInformant::ErrorRecorderRequestIdTest < ActionDispatch::IntegrationTe
     end
 
     assert_nil RailsInformant::Occurrence.last.request_id
+  end
+end
+
+class RailsInformant::ErrorRecorderBrowserTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+  include JavascriptAssetStubs
+
+  CART = "https://shop.example/assets/controllers/cart_controller-3a1b2c4d.js"
+  CHROME_STACK = <<~STACK
+    TypeError: Cannot read properties of null (reading 'value')
+        at CartController.connect (#{CART}:42:15)
+  STACK
+  CLIENT_CRUMB = { "category" => "ui.click", "message" => "button", "metadata" => { "id" => "buy" }, "timestamp" => "2026-11-01T10:00:00.000Z" }.freeze
+
+  setup do
+    stub_javascript_assets
+    RailsInformant::ErrorRecorder.reset_spike_counters!
+  end
+
+  test "a report creates a browser group named after the JS error" do
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1,
+                      -> { RailsInformant::Occurrence.count } => 1 do
+      record_browser
+    end
+
+    group = RailsInformant::ErrorGroup.last
+    assert_equal "JS::TypeError", group.error_class
+    assert_equal "browser", group.source
+    assert_nil group.controller_action
+  end
+
+  test "a name outside the allowlist is stored as JS::Error" do
+    record_browser "name" => "Foo Bar!"
+
+    assert_equal "JS::Error", RailsInformant::ErrorGroup.last.error_class
+  end
+
+  test "a new deploy's digest and shifted line join the group and reopen it when resolved" do
+    record_browser
+    group = RailsInformant::ErrorGroup.last
+    group.update_columns status: "resolved", resolved_at: 1.minute.ago
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser("stack" => "    at CartController.connect (https://shop.example/assets/controllers/cart_controller-9e8f7a6b.js:45:3)",
+        context: context(rendered_at: Time.current))
+    end
+
+    assert_equal "unresolved", group.reload.status
+    assert_equal 2, group.total_occurrences
+  end
+
+  test "a Safari-worded message for the same frame joins the group" do
+    record_browser
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser "message" => "null is not an object (evaluating 'el.value')", "stack" => "connect@#{CART}:42:20"
+    end
+  end
+
+  test "a frameless browser TypeError and a Ruby TypeError land in different groups" do
+    ruby_error = TypeError.new("boom").tap { it.set_backtrace [ "/app/models/cart.rb:3:in 'total'" ] }
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 2 do
+      RailsInformant::ErrorRecorder.record ruby_error
+      record_browser "message" => "boom", "stack" => ""
+    end
+  end
+
+  test "the occurrence carries the page and the client's breadcrumbs, and leaves no server crumbs behind" do
+    RailsInformant::BreadcrumbBuffer.current.record category: "sql.active_record", message: "sql"
+
+    record_browser(context: context(request_id: "req-render", revision: "abc1234", user_context: { "id" => 7 }))
+    assert_empty RailsInformant::BreadcrumbBuffer.current.flush
+
+    occurrence = RailsInformant::Occurrence.last
+    assert_equal "https://shop.example/cart", occurrence.request_context["url"]
+    assert_equal "Mozilla/5.0", occurrence.request_context["user_agent"]
+    assert_equal [ CLIENT_CRUMB ], occurrence.breadcrumbs
+    assert_equal({ "id" => 7 }, occurrence.user_context)
+    assert_equal "req-render", occurrence.request_id
+    assert_equal "req-failing", occurrence.failing_request_id
+    assert_equal "abc1234", occurrence.git_sha
+    assert_equal [ "app/javascript/controllers/cart_controller.js:42:15:in 'connect'" ], occurrence.backtrace
+  end
+
+  test "before_record callbacks see the JS error and can halt the report" do
+    seen = nil
+    RailsInformant.config.before_record do |event|
+      seen = [ event.error.message, event.error.backtrace, event.source, event.request_path, event.error_class ]
+      event.halt!
+    end
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser
+    end
+
+    assert_equal [ "Cannot read properties of null (reading 'value')",
+      [ "app/javascript/controllers/cart_controller.js:42:15:in 'connect'" ], "browser", "/cart", "JS::TypeError" ], seen
+  end
+
+  test "server events report their source as server" do
+    source = nil
+    RailsInformant.config.before_record { source = it.source }
+
+    RailsInformant::ErrorRecorder.record StandardError.new("boom").tap { it.set_backtrace [ "/app/models/user.rb:1" ] }
+
+    assert_equal "server", source
+  end
+
+  test "ignored_exceptions matches the full JS name only" do
+    RailsInformant.config.ignored_exceptions = [ "TypeError" ]
+    RailsInformant.reset_caches!
+    assert_difference(-> { RailsInformant::ErrorGroup.count }, 1) { record_browser }
+
+    RailsInformant.config.ignored_exceptions = [ "JS::TypeError" ]
+    RailsInformant.reset_caches!
+    assert_no_difference(-> { RailsInformant::ErrorGroup.last.reload.total_occurrences }) { record_browser }
+  end
+
+  test "a page under ignored_paths is dropped" do
+    RailsInformant.config.ignored_paths = [ "/cart" ]
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser "url" => "https://shop.example/cart/items?x=1"
+    end
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      record_browser "url" => "https://shop.example/cartography"
+    end
+  end
+
+  test "a stale tab from before the resolution does not reopen the group or notify, but is counted" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser
+    group = RailsInformant::ErrorGroup.last
+    group.update_columns status: "resolved", resolved_at: 1.hour.ago, last_occurrence_stored_at: 1.minute.ago
+
+    assert_difference -> { RailsInformant::Occurrence.count } => 1 do
+      assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+        record_browser(context: context(rendered_at: 2.hours.ago))
+      end
+    end
+
+    group.reload
+    assert_equal "resolved", group.status
+    assert_equal 2, group.total_occurrences
+  end
+
+  test "a day-old blob rendered before the resolution records with no user and does not reopen the group" do
+    record_browser
+    group = RailsInformant::ErrorGroup.last
+    group.update_columns status: "resolved", resolved_at: 1.hour.ago, last_occurrence_stored_at: 1.minute.ago
+
+    record_browser(context: context(rendered_at: 25.hours.ago, revision: "abc1234"))
+
+    assert_equal "resolved", group.reload.status
+    assert_nil RailsInformant::Occurrence.last.user_context
+    assert_equal "abc1234", RailsInformant::Occurrence.last.git_sha
+  end
+
+  test "a page rendered after the resolution reopens the group and notifies" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser
+    group = RailsInformant::ErrorGroup.last
+    group.update_columns status: "resolved", resolved_at: 1.hour.ago
+
+    assert_enqueued_with job: RailsInformant::NotifyJob do
+      record_browser(context: context(rendered_at: 1.minute.ago))
+    end
+
+    assert_equal "unresolved", group.reload.status
+  end
+
+  test "once the hourly new-group limit is reached, new browser groups are dropped but existing ones still record" do
+    RailsInformant.config.browser_new_group_limit = 2
+    record_browser "message" => "first", "stack" => ""
+    record_browser "message" => "second", "stack" => ""
+    Rails.logger.expects(:warn).with(includes("browser_new_group_limit")).once
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser "message" => "third", "stack" => ""
+      record_browser "message" => "fourth", "stack" => ""
+    end
+
+    assert_difference -> { RailsInformant::ErrorGroup.find_by(message: "first").total_occurrences } => 1 do
+      record_browser "message" => "first", "stack" => ""
+    end
+  end
+
+  test "groups created more than an hour ago and server groups do not count toward the limit" do
+    RailsInformant.config.browser_new_group_limit = 1
+    record_browser "message" => "old", "stack" => ""
+    RailsInformant::ErrorGroup.last.update_columns created_at: 2.hours.ago
+    RailsInformant::ErrorRecorder.record StandardError.new("server").tap { it.set_backtrace [ "/app/models/user.rb:1" ] }
+    assert_equal 2, RailsInformant::ErrorGroup.count
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      record_browser "message" => "new", "stack" => ""
+    end
+  end
+
+  test "spike protection applies to browser groups" do
+    RailsInformant.config.spike_protection = { threshold: 2, window: 1.minute }
+
+    # Each report lands past the occurrence cooldown, inside the spike window.
+    1.upto(4) { |i| travel(10.seconds * i) { record_browser } }
+
+    group = RailsInformant::ErrorGroup.last
+    assert_equal 4, group.total_occurrences
+    assert_equal 2, group.occurrences.count
+  end
+
+  test "a server error raised while ingesting a browser report is not recorded" do
+    RailsInformant::Current.ingesting_browser_report = true
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      RailsInformant::ErrorRecorder.record StandardError.new("ingest failed").tap { it.set_backtrace [ "/app/models/user.rb:1" ] }
+    end
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1 do
+      record_browser
+    end
+  end
+
+  private
+
+  def context(rendered_at: 1.minute.ago, request_id: nil, revision: nil, user_context: nil)
+    RailsInformant::BrowserReport::Context.new(rendered_at:, request_id:, revision:, user_context:)
+  end
+
+  def record_browser(context: nil, **overrides)
+    report = {
+      "breadcrumbs" => [ CLIENT_CRUMB ],
+      "failing_request_id" => "req-failing",
+      "kind" => "error",
+      "message" => "Cannot read properties of null (reading 'value')",
+      "name" => "TypeError",
+      "occurred_at" => "2026-11-01T10:00:01.000Z",
+      "stack" => CHROME_STACK,
+      "url" => "https://shop.example/cart"
+    }.merge(overrides)
+    RailsInformant::ErrorRecorder.record_browser report, context:, base_url: ORIGIN, remote_ip: "198.51.100.4", user_agent: "Mozilla/5.0"
   end
 end

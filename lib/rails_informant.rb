@@ -25,6 +25,9 @@ module RailsInformant
 
   autoload :BreadcrumbBuffer, "rails_informant/breadcrumb_buffer"
   autoload :BreadcrumbSubscriber, "rails_informant/breadcrumb_subscriber"
+  autoload :BrowserError, "rails_informant/browser_error"
+  autoload :BrowserFingerprint, "rails_informant/browser_fingerprint"
+  autoload :BrowserReport, "rails_informant/browser_report"
   autoload :ClaudeIntegrationContent, "rails_informant/claude_integration_content"
   autoload :ContextBuilder, "rails_informant/context_builder"
   autoload :ContextFilter, "rails_informant/context_filter"
@@ -118,10 +121,17 @@ module RailsInformant
 
     def ignored_path?(env)
       return false unless env
-      paths = ignored_paths
-      return false if paths.empty?
-      request_path = env["PATH_INFO"]
-      paths.any? { request_path == it || request_path&.start_with?("#{it}/") }
+      ignored_request_path? env["PATH_INFO"]
+    end
+
+    def ignored_request_path?(path)
+      ignored_paths.any? { path == it || path&.start_with?("#{it}/") }
+    end
+
+    # Browser errors have no Ruby class to walk, so the stored JS:: name is
+    # matched as a plain string.
+    def ignored_error_class?(error_class)
+      ignored_exception_set.include?(error_class)
     end
 
     def current_git_sha

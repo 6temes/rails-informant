@@ -20,6 +20,7 @@ module RailsInformant
       original_sha
       resolved_at
       severity
+      source
       status
       total_occurrences
       updated_at
@@ -57,6 +58,7 @@ module RailsInformant
     scope :by_error_class, ->(error_class) { where(error_class:) if error_class }
     scope :by_job_class, ->(job_class) { where(job_class:) if job_class }
     scope :by_severity, ->(severity) { where(severity:) if severity }
+    scope :by_source, ->(source) { where(source:) if source }
     scope :by_status, ->(status) { where(status:) if status }
     scope :search, ->(q) { where(arel_table[:message].matches("%#{sanitize_sql_like(q)}%")) if q }
     scope :since, ->(time) { where(last_seen_at: time..) if time }
@@ -128,6 +130,12 @@ module RailsInformant
       raise RailsInformant::InvalidParameterError, "Circular duplicate chain detected" if target.circular_duplicate_chain?(id)
 
       update!(status: "duplicate", duplicate_of: target)
+    end
+
+    # A page rendered before the group was resolved is still running the code
+    # the fix replaced, so its errors are not evidence the fix failed.
+    def rendered_before_resolution?(rendered_at)
+      status == "resolved" && rendered_at.present? && rendered_at <= resolved_at
     end
 
     def detect_regression!
