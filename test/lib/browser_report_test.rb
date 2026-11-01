@@ -79,6 +79,19 @@ class RailsInformant::BrowserReportTest < ActiveSupport::TestCase
     assert_nil build("url" => nil).page_path
   end
 
+  test "the stored page URL drops its fragment, where sign-in flows put tokens" do
+    url = build("url" => "https://shop.example/callback?page=2#access_token=secret").occurrence_attributes[:request_context][:url]
+
+    assert_equal "https://shop.example/callback?page=2", url
+  end
+
+  test "an oversized stack is capped in length and per line before it is stored" do
+    report = build("stack" => "TypeError: x\n    at #{"a" * 100_000} (#{CART}:42:15)\n" * 3)
+
+    assert report.occurrence_attributes[:backtrace].all? { it.length <= RailsInformant::BrowserReport::MAX_BACKTRACE_LINE_LENGTH }
+    assert_operator report.occurrence_attributes[:backtrace].sum(&:length), :<=, RailsInformant::BrowserReport::MAX_STACK_LENGTH
+  end
+
   private
 
   def build(context: nil, **overrides)

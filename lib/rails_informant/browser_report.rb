@@ -14,6 +14,7 @@ module RailsInformant
     MAX_BREADCRUMBS = 20
     MAX_MESSAGE_LENGTH = 1_000
     MAX_REQUEST_ID_LENGTH = 255
+    MAX_STACK_LENGTH = 20_000
     NAME_PATTERN = /\A[A-Z][A-Za-z0-9_]{0,63}\z/
 
     attr_reader :context, :error, :error_class, :message, :page_path, :stack
@@ -27,8 +28,8 @@ module RailsInformant
       @name = string(report["name"])
       @error_class = "JS::#{NAME_PATTERN.match?(@name) ? @name : "Error"}"
       @message = string(report["message"]).truncate(MAX_MESSAGE_LENGTH)
-      @stack = JavascriptStack.parse(string(report["stack"]), origin: base_url)
-      @page_url = string(report["url"]).presence
+      @stack = JavascriptStack.parse(string(report["stack"]).first(MAX_STACK_LENGTH), origin: base_url)
+      @page_url = string(report["url"]).split("#").first.presence
       @page_path = page_path_of(@page_url)
       @error = BrowserError.new(message, backtrace:, name: @name)
     end
@@ -72,7 +73,7 @@ module RailsInformant
     def backtrace
       lines = stack.backtrace
       lines = lines.drop(1) if v8_header?(lines.first)
-      ContextFilter.filter_backtrace(lines)
+      ContextFilter.filter_backtrace(lines.map { it.first(MAX_BACKTRACE_LINE_LENGTH) })
     end
 
     def v8_header?(line)
