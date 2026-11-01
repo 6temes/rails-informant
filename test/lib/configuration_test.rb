@@ -108,6 +108,28 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     ENV.delete("INFORMANT_CAPTURE_RUNNER_ERRORS")
   end
 
+  test "capture_browser_errors defaults to false" do
+    assert_equal false, RailsInformant::Configuration.new.capture_browser_errors
+  end
+
+  test "capture_browser_errors reads true from ENV" do
+    ENV["INFORMANT_CAPTURE_BROWSER_ERRORS"] = "true"
+    assert_equal true, RailsInformant::Configuration.new.capture_browser_errors
+  ensure
+    ENV.delete("INFORMANT_CAPTURE_BROWSER_ERRORS")
+  end
+
+  test "browser_new_group_limit defaults to 50" do
+    assert_equal 50, RailsInformant::Configuration.new.browser_new_group_limit
+  end
+
+  test "browser_new_group_limit reads an integer from ENV" do
+    ENV["INFORMANT_BROWSER_NEW_GROUP_LIMIT"] = "120"
+    assert_equal 120, RailsInformant::Configuration.new.browser_new_group_limit
+  ensure
+    ENV.delete("INFORMANT_BROWSER_NEW_GROUP_LIMIT")
+  end
+
   test "retention_days reads from ENV" do
     ENV["INFORMANT_RETENTION_DAYS"] = "90"
     config = RailsInformant::Configuration.new

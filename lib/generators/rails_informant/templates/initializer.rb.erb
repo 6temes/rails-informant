@@ -26,4 +26,10 @@ RailsInformant.configure do |config|
 
   # Auto-purge resolved errors after N days (nil = keep forever)
   # config.retention_days = 30
+
+  # Browser error capture (off by default; `rails g rails_informant:browser` enables it)
+  # config.capture_browser_errors = true
+
+  # Most new browser error groups created per hour (default 50)
+  # config.browser_new_group_limit = 50
 end

@@ -151,6 +151,32 @@ class RailsInformant::ContextBuilderTest < ActiveSupport::TestCase
 
   # -- filtered_url --
 
+  # -- group_attributes / occurrence_attributes --
+
+  test "group_attributes tags server groups with their source" do
+    attrs = RailsInformant::ContextBuilder.group_attributes(error_with_backtrace, severity: "error", context: {}, env: nil, now: Time.current)
+
+    assert_equal "server", attrs[:source]
+  end
+
+  test "group_attributes and occurrence_attributes omit browser capture keys on an unmigrated schema" do
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+    error = error_with_backtrace
+
+    group_attrs = RailsInformant::ContextBuilder.group_attributes(error, severity: "error", context: {}, env: nil, now: Time.current)
+    occurrence_attrs = RailsInformant::ContextBuilder.occurrence_attributes(error, env: nil, context: {})
+
+    assert_not group_attrs.key?(:source)
+    assert_not occurrence_attrs.key?(:request_id)
+  end
+
+  test "occurrence_attributes leaves request_id nil when the context names a controller as a string" do
+    attrs = RailsInformant::ContextBuilder.occurrence_attributes(StandardError.new("boom"), env: nil, context: { controller: "users", action: "show" })
+
+    assert attrs.key?(:request_id)
+    assert_nil attrs[:request_id]
+  end
+
   test "filtered_url filters sensitive query parameters" do
     env = rack_env(
       "HTTP_HOST" => "example.com",
@@ -195,6 +221,10 @@ class RailsInformant::ContextBuilderTest < ActiveSupport::TestCase
   end
 
   private
+
+  def error_with_backtrace
+    StandardError.new("boom").tap { it.set_backtrace [ "/app/models/user.rb:42:in `save'" ] }
+  end
 
   def rack_env(overrides = {})
     defaults = {

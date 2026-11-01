@@ -68,7 +68,7 @@ module RailsInformant
       end
 
       def group_attributes(error, severity:, context:, env:, now:)
-        {
+        attrs = {
           error_class: error.class.name, severity:,
           message: ContextFilter.filter_message(error.message),
           first_backtrace_line: Fingerprint.first_app_frame(error),
@@ -77,10 +77,12 @@ module RailsInformant
           first_seen_at: now, last_seen_at: now,
           total_occurrences: 1, created_at: now, updated_at: now
         }
+        attrs[:source] = "server" if RailsInformant.browser_schema_ready?
+        attrs
       end
 
       def occurrence_attributes(error, env:, context:)
-        {
+        attrs = {
           backtrace: ContextFilter.filter_backtrace(error.backtrace),
           exception_chain: build_exception_chain(error),
           request_context: build_request_context(env),
@@ -90,6 +92,8 @@ module RailsInformant
           breadcrumbs: BreadcrumbBuffer.current.flush,
           git_sha: RailsInformant.current_git_sha
         }
+        attrs[:request_id] = extract_request_id(env, context) if RailsInformant.browser_schema_ready?
+        attrs
       end
 
       def build_custom_context(error)
@@ -108,6 +112,19 @@ module RailsInformant
             "#{controller}##{action}"
           else
             nil
+          end
+        end
+      end
+
+      # Rails assigns the ID in ActionDispatch::RequestId, so it exists even
+      # when no proxy sent an X-Request-Id header.
+      def extract_request_id(env, context)
+        if env
+          env["action_dispatch.request_id"]
+        else
+          case context
+          in { controller: ActionController::Metal => controller } then controller.request.request_id
+          else nil
           end
         end
       end

@@ -35,6 +35,7 @@ module RailsInformant
   autoload :Event, "rails_informant/event"
   autoload :Fingerprint, "rails_informant/fingerprint"
   autoload :Integration, "rails_informant/integration"
+  autoload :JavascriptStack, "rails_informant/javascript_stack"
   autoload :JobExecutionContext, "rails_informant/job_execution_context"
   autoload :StructuredEventSubscriber, "rails_informant/structured_event_subscriber"
 
@@ -56,6 +57,8 @@ module RailsInformant
   class << self
     delegate :app_name,
              :api_token,
+             :browser_new_group_limit,
+             :capture_browser_errors,
              :capture_errors,
              :capture_user_email,
              :ignored_exceptions,
@@ -72,6 +75,7 @@ module RailsInformant
     end
 
     def reset_caches!
+      @_browser_schema_ready = nil
       @_initialized = nil
       @_ignored_set = nil
       config.reset_notifiers!
@@ -83,6 +87,18 @@ module RailsInformant
       @_initialized = capture_errors && defined?(ActiveRecord::Base) && ActiveRecord::Base.connection_pool.with_connection { true }
     rescue ActiveRecord::ConnectionNotEstablished, ActiveRecord::NoDatabaseError
       false
+    end
+
+    # Hosts that bump the gem before running the browser capture migration
+    # still record server errors: the recorder rescues and logs, so writing an
+    # unknown attribute would silently drop every one of them.
+    def browser_schema_ready?
+      if @_browser_schema_ready.nil?
+        @_browser_schema_ready = ErrorGroup.column_names.include?("source") &&
+          Occurrence.column_names.include?("request_id") &&
+          Occurrence.column_names.include?("failing_request_id")
+      end
+      @_browser_schema_ready
     end
 
     def ignored_exception?(exception)

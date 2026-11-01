@@ -1,4 +1,5 @@
 require "test_helper"
+require "net/http"
 
 class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
@@ -346,5 +347,65 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     error = StandardError.new(message)
     error.set_backtrace [ "/app/models/user.rb:42:in `save'" ]
     error
+  end
+end
+
+class RailsInformant::ErrorRecorderRequestIdTest < ActionDispatch::IntegrationTest
+  class ReportingJob < ActiveJob::Base
+    def perform = Rails.error.report(RuntimeError.new("reported from a job"))
+  end
+
+  # The dummy app re-raises non-rescuable exceptions, which would leave no
+  # response (and no X-Request-Id header) to compare against.
+  setup do
+    @show_exceptions = Rails.application.env_config["action_dispatch.show_exceptions"]
+    Rails.application.env_config["action_dispatch.show_exceptions"] = :all
+  end
+
+  teardown do
+    Rails.application.env_config["action_dispatch.show_exceptions"] = @show_exceptions
+  end
+
+  test "an error raised in a request records the request ID Rails assigned" do
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1,
+                      -> { RailsInformant::Occurrence.count } => 1 do
+      get "/failures/raise_error"
+    end
+
+    assert_response :internal_server_error
+    assert_predicate response.headers["X-Request-Id"], :present?
+    assert_equal response.headers["X-Request-Id"], RailsInformant::Occurrence.last.request_id
+    assert_equal "server", RailsInformant::ErrorGroup.last.source
+  end
+
+  test "an error reported through Rails.error inside an action records the controller's request ID" do
+    assert_difference -> { RailsInformant::Occurrence.count } => 1 do
+      get "/failures/report_error"
+    end
+
+    assert_response :ok
+    occurrence = RailsInformant::Occurrence.last
+    assert_equal "RuntimeError", occurrence.error_group.error_class
+    assert_nil occurrence.request_context, "the subscriber path has no rack env"
+    assert_equal response.headers["X-Request-Id"], occurrence.request_id
+  end
+
+  test "an error reported from a job leaves request_id nil" do
+    assert_difference -> { RailsInformant::Occurrence.count } => 1 do
+      ReportingJob.perform_now
+    end
+
+    assert_nil RailsInformant::Occurrence.last.request_id
+  end
+
+  test "an unmigrated schema still records server errors without the new attributes" do
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1,
+                      -> { RailsInformant::Occurrence.count } => 1 do
+      get "/failures/raise_error"
+    end
+
+    assert_nil RailsInformant::Occurrence.last.request_id
   end
 end
