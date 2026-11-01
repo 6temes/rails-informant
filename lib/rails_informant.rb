@@ -25,6 +25,7 @@ module RailsInformant
 
   autoload :BreadcrumbBuffer, "rails_informant/breadcrumb_buffer"
   autoload :BreadcrumbSubscriber, "rails_informant/breadcrumb_subscriber"
+  autoload :BrowserContext, "rails_informant/browser_context"
   autoload :BrowserError, "rails_informant/browser_error"
   autoload :BrowserFingerprint, "rails_informant/browser_fingerprint"
   autoload :BrowserReport, "rails_informant/browser_report"
