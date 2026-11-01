@@ -71,17 +71,10 @@ module RailsInformant
 
       def location_of(error_group, occurrence)
         if error_group.source == "browser"
-          "browser #{page_path_of(occurrence) || error_group.first_backtrace_line}".strip
+          "browser #{ContextBuilder.page_path(occurrence&.request_context&.dig("url")) || error_group.first_backtrace_line}".strip
         else
           error_group.controller_action || error_group.job_class || error_group.first_backtrace_line
         end
-      end
-
-      def page_path_of(occurrence)
-        url = occurrence&.request_context&.dig("url")
-        URI.parse(url).path.presence if url
-      rescue URI::InvalidURIError
-        nil
       end
 
       # Messages from browser groups are written by anonymous visitors, and

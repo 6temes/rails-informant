@@ -114,13 +114,13 @@ export function start (win) {
     queue = []
     bytes = 0
     if (chooseTransport(trigger, navigator) === 'beacon') {
-      navigator.sendBeacon(endpoint(), new Blob([body], { type: 'application/json' }))
+      navigator.sendBeacon(endpoint(), new Blob([body], { type: 'text/plain' }))
     } else {
       // A failed send must not surface as an unhandled rejection, which would be reported in turn.
       send.call(win, endpoint(), {
         body,
         credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain' },
         keepalive: true,
         method: 'POST'
       }).catch(() => {})

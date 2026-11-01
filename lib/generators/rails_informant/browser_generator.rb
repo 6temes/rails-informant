@@ -5,7 +5,9 @@ module RailsInformant
   class BrowserGenerator < Rails::Generators::Base
     include ActiveRecord::Generators::Migration
 
+    HEAD_CLOSE_LINE = /^([ \t]*)<\/head>/
     IMPORTMAP = "config/importmap.rb"
+    IMPORTMAP_TAGS_LINE = /^([ \t]*)<%=\s*javascript_importmap_tags/
     INITIALIZER = "config/initializers/rails_informant.rb"
     LAYOUT = "app/views/layouts/application.html.erb"
     TAG = "<%= informant_browser_tag %>"
@@ -36,12 +38,10 @@ module RailsInformant
       layout = read(LAYOUT)
       return if layout.include?("informant_browser_tag")
 
-      if (line = layout[/^([ \t]*)<%=\s*javascript_importmap_tags/])
-        indent = line[/\A[ \t]*/]
-        inject_into_file LAYOUT, "#{indent}#{TAG}\n", before: /^[ \t]*<%=\s*javascript_importmap_tags/
-      elsif (line = layout[/^([ \t]*)<\/head>/])
-        indent = line[/\A[ \t]*/]
-        inject_into_file LAYOUT, "#{indent}  #{TAG}\n", before: /^[ \t]*<\/head>/
+      if (indent = layout[IMPORTMAP_TAGS_LINE, 1])
+        inject_into_file LAYOUT, "#{indent}#{TAG}\n", before: IMPORTMAP_TAGS_LINE
+      elsif (indent = layout[HEAD_CLOSE_LINE, 1])
+        inject_into_file LAYOUT, "#{indent}  #{TAG}\n", before: HEAD_CLOSE_LINE
       else
         say "No javascript_importmap_tags or </head> in #{LAYOUT}. Add #{TAG} to your layout's <head> manually.", :red
       end

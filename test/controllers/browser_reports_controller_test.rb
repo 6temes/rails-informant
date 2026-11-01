@@ -76,6 +76,14 @@ class RailsInformant::BrowserReportsControllerTest < ActionDispatch::Integration
     assert_response :content_too_large
   end
 
+  test "an oversized JSON body is rejected before Rails parses or logs it" do
+    ActionDispatch::Request.any_instance.expects(:filtered_parameters).never
+
+    post_reports report("message" => "x" * 65.kilobytes)
+
+    assert_response :content_too_large
+  end
+
   test "only the first 10 reports in a request are recorded" do
     reports = ("a".."l").map { report("message" => "failure #{it}") }
 

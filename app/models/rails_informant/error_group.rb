@@ -54,6 +54,7 @@ module RailsInformant
 
     scope :active, -> { where.not(status: "duplicate") }
     scope :before, ->(time) { where(last_seen_at: ..time) if time }
+    scope :browser_created_this_hour, -> { where(source: "browser", created_at: 1.hour.ago..) }
     scope :by_controller_action, ->(action) { where(controller_action: action) if action }
     scope :by_error_class, ->(error_class) { where(error_class:) if error_class }
     scope :by_job_class, ->(job_class) { where(job_class:) if job_class }
@@ -136,6 +137,12 @@ module RailsInformant
     # the fix replaced, so its errors are not evidence the fix failed.
     # A page with no verified render time could be a forged report, so only a
     # page the server vouches for as newer than the fix may reopen the group.
+    # Installs that have not run the browser migration have no source column,
+    # and every group they hold is a server group.
+    def source
+      RailsInformant.browser_schema_ready? ? super : "server"
+    end
+
     def rendered_before_resolution?(rendered_at)
       status == "resolved" && (rendered_at.nil? || rendered_at <= resolved_at)
     end

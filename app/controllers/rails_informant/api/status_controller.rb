@@ -17,13 +17,11 @@ module RailsInformant
 
       private
 
-      # Same query the recorder uses to enforce the cap, so an agent seeing
-      # the count at the limit knows new browser groups are being dropped.
       def browser_group_limit
-        return {} unless RailsInformant.config.capture_browser_errors
+        return {} unless RailsInformant.config.capture_browser_errors && RailsInformant.browser_schema_ready?
 
         {
-          browser_groups_created_this_hour: ErrorGroup.where(source: "browser", created_at: 1.hour.ago..).count,
+          browser_groups_created_this_hour: ErrorGroup.browser_created_this_hour.count,
           browser_new_group_limit: RailsInformant.config.browser_new_group_limit
         }
       end

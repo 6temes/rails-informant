@@ -10,6 +10,7 @@ module RailsInformant
     Context = Data.define(:rendered_at, :request_id, :revision, :user_context)
 
     BREADCRUMB_KEYS = %w[category duration message metadata timestamp].freeze
+    URL_BREADCRUMB_CATEGORIES = %w[fetch.error turbo.visit].freeze
     MAX_BACKTRACE_LINE_LENGTH = 255
     MAX_BREADCRUMBS = 20
     MAX_MESSAGE_LENGTH = 1_000
@@ -30,7 +31,7 @@ module RailsInformant
       @message = string(report["message"]).truncate(MAX_MESSAGE_LENGTH)
       @stack = JavascriptStack.parse(string(report["stack"]).first(MAX_STACK_LENGTH), origin: base_url)
       @page_url = string(report["url"]).split("#").first.presence
-      @page_path = page_path_of(@page_url)
+      @page_path = ContextBuilder.page_path(@page_url)
       @error = BrowserError.new(message, backtrace:, name: @name)
     end
 
@@ -81,17 +82,17 @@ module RailsInformant
     end
 
     def breadcrumbs
-      Array(report["breadcrumbs"]).grep(Hash).first(MAX_BREADCRUMBS).map { ContextFilter.filter(it.slice(*BREADCRUMB_KEYS)) }
+      Array(report["breadcrumbs"]).grep(Hash).first(MAX_BREADCRUMBS).map do |crumb|
+        crumb = ContextFilter.filter(crumb.slice(*BREADCRUMB_KEYS))
+        if URL_BREADCRUMB_CATEGORIES.include?(crumb["category"]) && crumb["message"].is_a?(String)
+          crumb["message"] = ContextBuilder.filtered_url(crumb["message"])
+        end
+        crumb
+      end
     end
 
     def first_backtrace_line
       (stack.first_app_frame || stack.frames.first)&.to_s&.first(MAX_BACKTRACE_LINE_LENGTH)
-    end
-
-    def page_path_of(url)
-      URI.parse(url).path.presence if url
-    rescue URI::InvalidURIError
-      nil
     end
 
     def string(value)

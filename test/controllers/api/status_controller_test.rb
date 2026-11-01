@@ -44,6 +44,17 @@ class RailsInformant::Api::StatusControllerTest < ActionDispatch::IntegrationTes
     assert_equal 10, body["browser_new_group_limit"]
   end
 
+  test "omits the browser new-group cap while the browser migration has not run" do
+    RailsInformant.config.capture_browser_errors = true
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+    RailsInformant::ErrorGroup.stubs(:browser_created_this_hour).raises(ActiveRecord::StatementInvalid, "no such column: source")
+
+    get "/informant/api/v1/status", headers: @headers
+
+    assert_response :ok
+    assert_not JSON.parse(response.body).key?("browser_groups_created_this_hour")
+  end
+
   test "omits the browser new-group cap when browser capture is off" do
     get "/informant/api/v1/status", headers: @headers
 

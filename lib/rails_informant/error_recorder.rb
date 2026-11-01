@@ -83,7 +83,7 @@ module RailsInformant
         return false if ErrorGroup.exists?(fingerprint:)
 
         limit = RailsInformant.config.browser_new_group_limit
-        return false if ErrorGroup.where(source: "browser", created_at: 1.hour.ago..).count < limit
+        return false if ErrorGroup.browser_created_this_hour.count < limit
 
         unless Current.browser_group_limit_logged
           Current.browser_group_limit_logged = true

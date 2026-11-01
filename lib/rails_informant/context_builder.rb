@@ -137,6 +137,12 @@ module RailsInformant
         end
       end
 
+      def page_path(url)
+        URI.parse(url).path.presence if url
+      rescue URI::InvalidURIError
+        nil
+      end
+
       def filtered_url(url)
         uri = URI.parse(url)
         if uri.query.present?

@@ -149,8 +149,6 @@ class RailsInformant::ContextBuilderTest < ActiveSupport::TestCase
     assert_nil ctx
   end
 
-  # -- filtered_url --
-
   # -- group_attributes / occurrence_attributes --
 
   test "group_attributes tags server groups with their source" do
@@ -176,6 +174,8 @@ class RailsInformant::ContextBuilderTest < ActiveSupport::TestCase
     assert attrs.key?(:request_id)
     assert_nil attrs[:request_id]
   end
+
+  # -- filtered_url --
 
   test "filtered_url filters sensitive query parameters" do
     env = rack_env(

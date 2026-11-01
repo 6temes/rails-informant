@@ -79,6 +79,17 @@ class RailsInformant::BrowserReportTest < ActiveSupport::TestCase
     assert_nil build("url" => nil).page_path
   end
 
+  test "navigation and failed-request breadcrumbs have secret query parameters filtered" do
+    crumbs = [
+      { "category" => "turbo.visit", "message" => "/password/edit?secret=abc&step=2" },
+      { "category" => "fetch.error", "message" => "/api/cart?password=hunter2" },
+      { "category" => "ui.click", "message" => "button#buy?secret=keep" }
+    ]
+    stored = build("breadcrumbs" => crumbs).occurrence_attributes[:breadcrumbs].pluck("message")
+
+    assert_equal [ "/password/edit?secret=%5BFILTERED%5D&step=2", "/api/cart?password=%5BFILTERED%5D", "button#buy?secret=keep" ], stored
+  end
+
   test "the stored page URL drops its fragment, where sign-in flows put tokens" do
     url = build("url" => "https://shop.example/callback?page=2#access_token=secret").occurrence_attributes[:request_context][:url]
 

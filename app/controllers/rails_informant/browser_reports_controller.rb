@@ -20,6 +20,14 @@ module RailsInformant
     # Parameter wrapping would parse the body before the size check.
     wrap_parameters false
 
+    # Instrumentation parses a JSON body and logs it as Parameters before any
+    # callback runs, so a declared oversize body is refused ahead of it.
+    def process_action(...)
+      return head :content_too_large if request.content_length.to_i > MAX_BODY_BYTES
+
+      super
+    end
+
     before_action :verify_same_origin!
     rate_limit to: 30, within: 1.minute, store: LiveCacheStore, with: -> { head :too_many_requests }
     before_action :require_browser_schema!

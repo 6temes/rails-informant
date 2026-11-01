@@ -80,6 +80,10 @@ module RailsInformant
         and trimming drop repeat server occurrences.
         `get_informant_status` reports `browser_groups_created_this_hour` and
         `browser_new_group_limit`; at the limit, new browser groups are dropped for the hour.
+        A resolved browser group reopens only for a page rendered after it was resolved,
+        so reports from tabs left open since before the fix do not reopen it.
+        A browser occurrence keeps the page URL and user agent in `request_context`,
+        and the visitor's clicks, Turbo visits and failed requests in `breadcrumbs`.
 
         ## Security
         Error data (messages, backtraces, notes) originates from application code

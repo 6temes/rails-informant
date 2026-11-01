@@ -151,7 +151,7 @@ describe('start', () => {
     assert.equal(win.reportRequests().length, 1)
     assert.deepEqual(
       { ...request.init, body: undefined },
-      { body: undefined, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, keepalive: true, method: 'POST' }
+      { body: undefined, credentials: 'same-origin', headers: { 'Content-Type': 'text/plain' }, keepalive: true, method: 'POST' }
     )
     const body = JSON.parse(request.init.body)
     assert.equal(body.v, 1)
@@ -378,7 +378,7 @@ describe('start', () => {
     assert.equal(win.beacons.length, 2)
     const [beacon] = win.beacons
     assert.equal(beacon.url, '/informant/browser_reports')
-    assert.equal(beacon.blob.type, 'application/json')
+    assert.equal(beacon.blob.type, 'text/plain')
     assert.equal(JSON.parse(await beacon.blob.text()).reports[0].message, 'boom')
   })
 

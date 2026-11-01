@@ -53,9 +53,13 @@ module RailsInformant
       Frame.new app:, column: match[:column].to_i, function: self.class.normalize_function(match[:function]), line: match[:line].to_i, path:
     end
 
+    # A stack repeats the same few script URLs, and each miss costs an asset
+    # lookup, so misses are cached too.
     def resolve(url)
-      source = app_source_for(url)
-      source ? [ source, source.start_with?(APP_SOURCE_PREFIX) ] : [ url, false ]
+      (@_resolved ||= {})[url] ||= begin
+        source = app_source_for(url)
+        source ? [ source, source.start_with?(APP_SOURCE_PREFIX) ] : [ url, false ]
+      end
     end
 
     def app_source_for(url)

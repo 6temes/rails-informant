@@ -79,6 +79,18 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_nothing_raised { @notifier.notify(group, occurrence) }
   end
 
+  test "an install without the browser columns still notifies" do
+    group = create_error_group
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+    unmigrated = RailsInformant::ErrorGroup.select(RailsInformant::ErrorGroup.column_names - [ "source" ]).find(group.id)
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+    stub_http = stub_http_api
+
+    @notifier.notify(unmigrated, occurrence)
+
+    assert_match "*StandardError*", stub_http.captured_request.body
+  end
+
   test "payload includes Block Kit structure with branded header" do
     group = create_error_group
     occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])

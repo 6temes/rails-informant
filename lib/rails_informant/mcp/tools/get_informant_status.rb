@@ -3,7 +3,7 @@ module RailsInformant
     module Tools
       class GetInformantStatus < BaseTool
         tool_name "get_informant_status"
-        description "Get error monitoring summary: counts by status (unresolved, resolved, ignored, fix_pending, duplicate), deploy SHA, and top errors"
+        description "Get error monitoring summary: counts by status (unresolved, resolved, ignored, fix_pending, duplicate), deploy SHA, top errors, and, with browser capture on, browser groups created this hour against the new-group limit"
         input_schema(
           properties: {
             environment: { type: "string", description: "Target environment (defaults to first configured)" }
