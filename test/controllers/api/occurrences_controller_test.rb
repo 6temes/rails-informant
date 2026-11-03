@@ -56,6 +56,15 @@ class RailsInformant::Api::OccurrencesControllerTest < ActionDispatch::Integrati
     assert_not_includes ids, @occurrence.id
   end
 
+  test "filtering by request_id before the browser migration has run names the generator" do
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+
+    get "/informant/api/v1/occurrences", params: { request_id: "req-500" }, headers: @headers
+
+    assert_response :bad_request
+    assert_match "rails_informant:browser", JSON.parse(response.body)["error"]
+  end
+
   test "filters by request_id across the server and browser occurrences of one request" do
     server = create_occurrence(error_group: @group, request_id: "req-500")
     browser_group = create_error_group(fingerprint: "browser-fp", error_class: "JS::TypeError", source: "browser")

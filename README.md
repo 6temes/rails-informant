@@ -241,6 +241,8 @@ The tag renders nothing while capture is off, so it can stay in the layout.
 - The tag finds the endpoint through the engine's `rails_informant` route helper. Mounting the engine with a custom `as:` name renames that helper and breaks the tag.
 - Mounting the engine inside an authentication constraint blocks reports from signed-out pages.
 - Until the migration has run, the endpoint answers 503 and logs which generator to run.
+- Keep `informant_browser_tag` out of cached output (HTTP or CDN page caching, or a cached layout fragment). The tag carries the signed-in user for the request that rendered it, so a cached copy attributes every visitor's errors to that user for up to 24 hours.
+- On PostgreSQL with a very large `informant_occurrences` table, the migration's index builds block error recording while they run. Run it in a quiet window, or change the generated migration to add the indexes with `algorithm: :concurrently` (and `disable_ddl_transaction!`).
 
 ### The endpoint
 
@@ -250,7 +252,7 @@ Each request is bounded:
 
 - 30 requests per minute per IP, via Rails `rate_limit` on your app's `Rails.cache`. Under `:null_store` the limit does nothing. Behind a proxy or CDN that Rails does not trust (see `config.action_dispatch.trusted_proxies`), every visitor has the same IP and shares one limit.
 - 64 KB request body and 10 reports per request
-- `browser_new_group_limit` new browser groups per hour
+- `browser_new_group_limit` new browser groups per hour. Once the cap is full, Informant records a `RailsInformant::BrowserGroupLimitReached` warning group, which alerts like any other error, so a flood of noise cannot silently hide a new bug.
 
 ### What the client sends
 

@@ -88,8 +88,19 @@ module RailsInformant
         unless Current.browser_group_limit_logged
           Current.browser_group_limit_logged = true
           Rails.logger.warn "[RailsInformant] Dropped browser report: browser_new_group_limit (#{limit}) new groups already created this hour"
+          record_browser_group_limit limit
         end
         true
+      end
+
+      # Recorded as an ordinary server group so a full cap alerts like any
+      # error instead of only reaching the log. It skips record's
+      # self-caused check, which the ingest request would otherwise trip.
+      def record_browser_group_limit(limit)
+        raise BrowserGroupLimitReached, "browser_new_group_limit (#{limit}) reached: new browser error groups are dropped for the rest of the hour"
+      rescue BrowserGroupLimitReached => e
+        attrs = ContextBuilder.group_attributes(e, severity: "warning", context: {}, env: nil, now: Time.current)
+        record_group(Fingerprint.generate(e), attrs) { ContextBuilder.occurrence_attributes(e, env: nil, context: {}) }
       end
 
       def log_capture_failure(error)

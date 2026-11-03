@@ -311,6 +311,15 @@ class RailsInformant::Api::ErrorsControllerTest < ActionDispatch::IntegrationTes
     assert_not_includes ids, @group.id
   end
 
+  test "filtering by source before the browser migration has run names the generator" do
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+
+    get "/informant/api/v1/errors", params: { source: "browser" }, headers: @headers
+
+    assert_response :bad_request
+    assert_match "rails_informant:browser", JSON.parse(response.body)["error"]
+  end
+
   test "index filters by source" do
     browser = create_error_group(fingerprint: "browser-fp", error_class: "JS::TypeError", source: "browser")
 

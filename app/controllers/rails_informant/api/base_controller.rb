@@ -18,6 +18,13 @@ module RailsInformant
 
       private
 
+      def require_browser_schema_for!(param)
+        return if RailsInformant.browser_schema_ready?
+
+        raise RailsInformant::InvalidParameterError,
+          "#{param} needs the browser capture columns: run `bin/rails generate rails_informant:browser` and migrate"
+      end
+
       def parse_time(value)
         Time.parse(value)
       rescue ArgumentError

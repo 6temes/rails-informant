@@ -2,6 +2,7 @@ require "rails_informant/version"
 require "rails_informant/configuration"
 
 module RailsInformant
+  BrowserGroupLimitReached = Class.new(StandardError)
   InvalidParameterError = Class.new(StandardError)
   NotifierError = Class.new(StandardError)
 

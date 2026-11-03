@@ -598,7 +598,7 @@ class RailsInformant::ErrorRecorderBrowserTest < ActiveSupport::TestCase
     record_browser "message" => "second", "stack" => ""
     Rails.logger.expects(:warn).with(includes("browser_new_group_limit")).once
 
-    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+    assert_no_difference -> { RailsInformant::ErrorGroup.by_source("browser").count } do
       record_browser "message" => "third", "stack" => ""
       record_browser "message" => "fourth", "stack" => ""
     end
@@ -606,6 +606,22 @@ class RailsInformant::ErrorRecorderBrowserTest < ActiveSupport::TestCase
     assert_difference -> { RailsInformant::ErrorGroup.find_by(message: "first").total_occurrences } => 1 do
       record_browser "message" => "first", "stack" => ""
     end
+  end
+
+  test "reaching the new-group limit records and alerts one server warning group" do
+    RailsInformant.config.browser_new_group_limit = 1
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser "message" => "first", "stack" => ""
+
+    assert_enqueued_jobs 1, only: RailsInformant::NotifyJob do
+      record_browser "message" => "second", "stack" => ""
+      record_browser "message" => "third", "stack" => ""
+    end
+
+    limit_group = RailsInformant::ErrorGroup.find_by!(error_class: "RailsInformant::BrowserGroupLimitReached")
+    assert_equal "server", limit_group.source
+    assert_equal "warning", limit_group.severity
+    assert_match "browser_new_group_limit (1)", limit_group.message
   end
 
   test "groups created more than an hour ago and server groups do not count toward the limit" do

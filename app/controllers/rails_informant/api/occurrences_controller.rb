@@ -2,6 +2,7 @@ module RailsInformant
   module Api
     class OccurrencesController < BaseController
       def index
+        require_browser_schema_for!("request_id") if params[:request_id]
         occurrences = Occurrence.order(created_at: :desc)
         occurrences = occurrences.where(error_group_id: params[:error_group_id]) if params[:error_group_id]
         occurrences = occurrences.where(request_id: params[:request_id]).or(occurrences.where(failing_request_id: params[:request_id])) if params[:request_id]

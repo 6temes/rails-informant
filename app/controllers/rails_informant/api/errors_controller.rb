@@ -4,6 +4,7 @@ module RailsInformant
       before_action :find_error_group, only: [ :show, :update, :destroy, :fix_pending, :duplicate ]
 
       def index
+        require_browser_schema_for!("source") if params[:source]
         groups = params[:status] == "duplicate" ? ErrorGroup.all : ErrorGroup.active
         groups = groups
           .by_controller_action(params[:controller_action])
