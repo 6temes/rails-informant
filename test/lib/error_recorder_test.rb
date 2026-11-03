@@ -19,6 +19,20 @@ class RailsInformant::ErrorRecorderTest < ActiveSupport::TestCase
     assert_equal "unresolved", group.status
   end
 
+  test "records an error that was reported without being raised" do
+    error = StandardError.new("card declined")
+
+    assert_difference -> { RailsInformant::ErrorGroup.count } => 1,
+                      -> { RailsInformant::Occurrence.count } => 1 do
+      RailsInformant::ErrorRecorder.record error
+    end
+
+    group = RailsInformant::ErrorGroup.last
+    assert_nil group.first_backtrace_line
+    assert_equal RailsInformant::Fingerprint.generate(error), group.fingerprint
+    assert_nil group.occurrences.last.backtrace
+  end
+
   test "occurrence cooldown skips occurrence storage" do
     error = build_error
     RailsInformant::ErrorRecorder.record error

@@ -13,6 +13,8 @@ module RailsInformant
     end
 
     def self.first_app_frame(exception)
+      return unless exception.backtrace
+
       exception.backtrace.find { APP_FRAME_PATTERN.match?(it) } || exception.backtrace.first
     end
 
