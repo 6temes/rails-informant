@@ -25,6 +25,29 @@ class RailsInformant::Notifiers::WebhookTest < ActiveSupport::TestCase
     assert_nil payload["occurrence"]
   end
 
+  test "payload includes the group's source" do
+    group = create_error_group(error_class: "JS::TypeError", source: "browser")
+    occurrence = group.occurrences.create!(backtrace: [ "app.js:1:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    assert_equal "browser", JSON.parse(stub_http.captured_request.body)["source"]
+  end
+
+  test "an install without the browser columns still notifies, as a server error" do
+    group = create_error_group
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+    unmigrated = RailsInformant::ErrorGroup.select(RailsInformant::ErrorGroup.column_names - [ "source" ]).find(group.id)
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+    stub_http = stub_http_api
+
+    @notifier.notify(unmigrated, occurrence)
+
+    assert_equal "server", JSON.parse(stub_http.captured_request.body)["source"]
+  end
+
   test "excludes PII from payload" do
     group = create_error_group
     occurrence = group.occurrences.create!(

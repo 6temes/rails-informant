@@ -8,6 +8,7 @@ module RailsInformant
           properties: {
             environment: { type: "string", description: "Target environment (defaults to first configured)" },
             error_group_id: { type: "integer", description: "Filter by error group ID" },
+            request_id: { type: "string", description: "Filter by Rails request ID, matching an occurrence's request_id or failing_request_id. Returns the server occurrence for that request and any browser occurrences that followed it. A request that raised nothing on the server matches no server occurrence, which is normal" },
             since: { type: "string", description: "ISO 8601 datetime — only occurrences after this time" },
             until: { type: "string", description: "ISO 8601 datetime — only occurrences before this time" },
             page: { type: "integer", description: "Page number" },

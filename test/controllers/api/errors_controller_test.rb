@@ -311,6 +311,36 @@ class RailsInformant::Api::ErrorsControllerTest < ActionDispatch::IntegrationTes
     assert_not_includes ids, @group.id
   end
 
+  test "filtering by source before the browser migration has run names the generator" do
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+
+    get "/informant/api/v1/errors", params: { source: "browser" }, headers: @headers
+
+    assert_response :bad_request
+    assert_match "rails_informant:browser", JSON.parse(response.body)["error"]
+  end
+
+  test "index filters by source" do
+    browser = create_error_group(fingerprint: "browser-fp", error_class: "JS::TypeError", source: "browser")
+
+    get "/informant/api/v1/errors", params: { source: "browser" }, headers: @headers
+    assert_response :ok
+
+    data = JSON.parse(response.body)["data"]
+    assert_equal [ browser.id ], data.map { it["id"] }
+    assert_equal "browser", data.first["source"]
+  end
+
+  test "index lists both sources without a source filter" do
+    browser = create_error_group(fingerprint: "browser-fp", error_class: "JS::TypeError", source: "browser")
+
+    get "/informant/api/v1/errors", headers: @headers
+    assert_response :ok
+
+    sources = JSON.parse(response.body)["data"].to_h { [ it["id"], it["source"] ] }
+    assert_equal({ @group.id => "server", browser.id => "browser" }, sources)
+  end
+
   test "index returns 400 for invalid since date" do
     get "/informant/api/v1/errors", params: { since: "not-a-date" }, headers: @headers
     assert_response :bad_request

@@ -68,6 +68,7 @@ class RailsInformant::InstallGeneratorTest < Rails::Generators::TestCase
     assert_match(/Rails Informant installed!/, output)
     assert_match(/Run migrations/, output)
     assert_match(/rails_informant:skill/, output)
+    assert_match(/rails_informant:browser/, output)
   end
 
   private

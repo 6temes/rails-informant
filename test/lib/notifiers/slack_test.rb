@@ -79,6 +79,18 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     assert_nothing_raised { @notifier.notify(group, occurrence) }
   end
 
+  test "an install without the browser columns still notifies" do
+    group = create_error_group
+    occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
+    unmigrated = RailsInformant::ErrorGroup.select(RailsInformant::ErrorGroup.column_names - [ "source" ]).find(group.id)
+    RailsInformant.stubs(:browser_schema_ready?).returns(false)
+    stub_http = stub_http_api
+
+    @notifier.notify(unmigrated, occurrence)
+
+    assert_match "*StandardError*", stub_http.captured_request.body
+  end
+
   test "payload includes Block Kit structure with branded header" do
     group = create_error_group
     occurrence = group.occurrences.create!(backtrace: [ "/app/foo.rb:1" ])
@@ -247,5 +259,53 @@ class RailsInformant::Notifiers::SlackTest < ActiveSupport::TestCase
     payload = JSON.parse(stub_http.captured_request.body)
     header_text = payload["blocks"].first.dig("text", "text")
     assert header_text.length <= 150
+  end
+
+  test "location for a browser group names browser and the page path" do
+    group = create_error_group(error_class: "JS::TypeError", first_backtrace_line: "app/javascript/checkout.js:12:5", source: "browser")
+    occurrence = group.occurrences.create!(backtrace: [ "app/javascript/checkout.js:12:5" ], request_context: { "url" => "https://app.example.com/checkout?step=2" })
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    assert_equal "*Location:*\n`browser /checkout`", location_text(stub_http)
+  end
+
+  test "location for a browser group without a page URL falls back to its first frame" do
+    group = create_error_group(error_class: "JS::TypeError", first_backtrace_line: "app/javascript/checkout.js:12:5", source: "browser")
+    occurrence = group.occurrences.create!(backtrace: [ "app/javascript/checkout.js:12:5" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    assert_equal "*Location:*\n`browser app/javascript/checkout.js:12:5`", location_text(stub_http)
+  end
+
+  test "escapes Slack control sequences in message, error class and location" do
+    group = create_error_group(
+      error_class: "JS::<!here>",
+      first_backtrace_line: "<https://evil.example|a`b>",
+      message: "<!channel> & <https://x|y>",
+      source: "browser"
+    )
+    occurrence = group.occurrences.create!(backtrace: [ "app.js:1:1" ])
+
+    stub_http = stub_http_api
+
+    @notifier.notify(group, occurrence)
+
+    payload = JSON.parse(stub_http.captured_request.body)
+    assert_equal "JS::&lt;!here&gt;: &lt;!channel&gt; &amp; &lt;https://x|y&gt;", payload["text"]
+    assert_equal "*JS::&lt;!here&gt;*\n&lt;!channel&gt; &amp; &lt;https://x|y&gt;", payload["blocks"][1].dig("text", "text")
+    assert_equal "*Location:*\n`browser &lt;https://evil.example|ab&gt;`", location_text(stub_http)
+  end
+
+  private
+
+  def location_text(stub_http)
+    payload = JSON.parse(stub_http.captured_request.body)
+    payload["blocks"][2]["fields"].find { it["text"].start_with?("*Location:*") }["text"]
   end
 end

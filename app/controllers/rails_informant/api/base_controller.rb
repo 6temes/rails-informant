@@ -2,7 +2,7 @@ module RailsInformant
   module Api
     class BaseController < ActionController::API
       before_action :authenticate_token!
-      before_action :set_security_headers
+      include SecurityHeaders
 
       rescue_from RailsInformant::InvalidParameterError do |e|
         render json: { error: e.message }, status: :bad_request
@@ -17,6 +17,13 @@ module RailsInformant
       end
 
       private
+
+      def require_browser_schema_for!(param)
+        return if RailsInformant.browser_schema_ready?
+
+        raise RailsInformant::InvalidParameterError,
+          "#{param} needs the browser capture columns: run `bin/rails generate rails_informant:browser` and migrate"
+      end
 
       def parse_time(value)
         Time.parse(value)
@@ -37,13 +44,6 @@ module RailsInformant
           Rails.logger.warn "[RailsInformant] Auth failure from #{request.remote_ip} at #{Time.current.iso8601}"
           render json: { error: "Unauthorized" }, status: :unauthorized
         end
-      end
-
-      def set_security_headers
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["Content-Security-Policy"] = "default-src 'none'"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
       end
 
       def paginate(scope, only:)

@@ -13,6 +13,7 @@ module RailsInformant
             job_class: { type: "string", description: "Filter by background job class" },
             q: { type: "string", description: "Search error messages" },
             severity: { type: "string", enum: %w[error info warning], description: "Filter by severity" },
+            source: { type: "string", enum: %w[browser server], description: "Filter by where the error was raised: browser (JavaScript in a visitor's page) or server (Ruby). Omit to list both" },
             since: { type: "string", description: "ISO 8601 datetime — only errors last seen after this time" },
             until: { type: "string", description: "ISO 8601 datetime — only errors last seen before this time" },
             page: { type: "integer", description: "Page number (default 1)" },

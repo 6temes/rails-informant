@@ -238,6 +238,27 @@ class RailsInformant::ErrorGroupTest < ActiveSupport::TestCase
     assert_equal "unresolved", group.status
   end
 
+  test "rendered_before_resolution? is true only for a resolved group and a page rendered at or before resolved_at" do
+    group = create_error_group
+    group.update_columns status: "resolved", resolved_at: 1.hour.ago
+    group.reload
+
+    assert group.rendered_before_resolution?(group.resolved_at)
+    assert group.rendered_before_resolution?(2.hours.ago)
+    assert_not group.rendered_before_resolution?(1.minute.ago)
+    assert group.rendered_before_resolution?(nil)
+    assert_not create_error_group.rendered_before_resolution?(2.hours.ago)
+  end
+
+  test "by_source filters on source and returns everything without one" do
+    server = create_error_group
+    browser = create_error_group source: "browser"
+
+    assert_equal [ browser ], RailsInformant::ErrorGroup.by_source("browser").to_a
+    assert_equal [ server ], RailsInformant::ErrorGroup.by_source("server").to_a
+    assert_equal 2, RailsInformant::ErrorGroup.by_source(nil).count
+  end
+
   test "detect_regression! is a no-op for ignored group" do
     group = create_error_group
     group.update_columns status: "ignored"

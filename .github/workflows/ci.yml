@@ -46,3 +46,21 @@ jobs:
 
       - name: Check Hyperdrive companion content
         run: bundle exec rake hyperdrive:skills:check hyperdrive:manifest:check
+
+  javascript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # 22.12+ detects ES modules without a package.json.
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      # Node 24 treats a bare directory argument as a single test file, so the
+      # glob is quoted for Node to expand.
+      - name: Run JavaScript tests
+        run: node --test 'test/javascript/*.test.js'

@@ -18,11 +18,11 @@ module RailsInformant
 
       def build_payload(error_group, occurrence)
         {
-          text: "#{error_group.error_class}: #{error_group.message&.truncate(200)}",
+          text: "#{escape error_group.error_class}: #{escape error_group.message&.truncate(200)}",
           blocks: [
             header_block(error_group, occurrence),
             error_class_block(error_group),
-            fields_block(error_group),
+            fields_block(error_group, occurrence),
             context_block(occurrence)
           ].compact
         }
@@ -44,12 +44,12 @@ module RailsInformant
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "*#{error_group.error_class}*\n#{error_group.message&.truncate(200)}"
+            text: "*#{escape error_group.error_class}*\n#{escape error_group.message&.truncate(200)}"
           }
         }
       end
 
-      def fields_block(error_group)
+      def fields_block(error_group, occurrence)
         {
           type: "section",
           fields: [
@@ -57,16 +57,30 @@ module RailsInformant
             { type: "mrkdwn", text: "*Occurrences:*\n#{error_group.total_occurrences}" },
             { type: "mrkdwn", text: "*First seen:*\n#{error_group.first_seen_at&.iso8601}" },
             { type: "mrkdwn", text: "*Severity:*\n#{error_group.severity}" },
-            location_field(error_group)
+            location_field(error_group, occurrence)
           ].compact
         }
       end
 
-      def location_field(error_group)
-        location = error_group.controller_action || error_group.job_class || error_group.first_backtrace_line
+      def location_field(error_group, occurrence)
+        location = location_of(error_group, occurrence)
         return unless location
 
-        { type: "mrkdwn", text: "*Location:*\n`#{location.to_s.truncate(100)}`" }
+        { type: "mrkdwn", text: "*Location:*\n`#{escape location.to_s.delete("`").truncate(100)}`" }
+      end
+
+      def location_of(error_group, occurrence)
+        if error_group.source == "browser"
+          "browser #{ContextBuilder.page_path(occurrence&.request_context&.dig("url")) || error_group.first_backtrace_line}".strip
+        else
+          error_group.controller_action || error_group.job_class || error_group.first_backtrace_line
+        end
+      end
+
+      # Messages from browser groups are written by anonymous visitors, and
+      # Slack reads <!channel> and <url|label> in mrkdwn as a ping and a link.
+      def escape(text)
+        text&.gsub(/[&<>]/, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
       end
 
       def context_block(occurrence)

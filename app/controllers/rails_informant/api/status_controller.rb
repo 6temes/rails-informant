@@ -10,11 +10,21 @@ module RailsInformant
           resolved_count: counts.fetch("resolved", 0),
           unresolved_count: counts.fetch("unresolved", 0),
           deploy_sha: RailsInformant.current_git_sha,
-          top_errors: top_errors
+          top_errors: top_errors,
+          **browser_group_limit
         }
       end
 
       private
+
+      def browser_group_limit
+        return {} unless RailsInformant.config.capture_browser_errors && RailsInformant.browser_schema_ready?
+
+        {
+          browser_groups_created_this_hour: ErrorGroup.browser_created_this_hour.count,
+          browser_new_group_limit: RailsInformant.config.browser_new_group_limit
+        }
+      end
 
       def top_errors
         ErrorGroup

@@ -37,6 +37,9 @@ module RailsInformant
       say "  3. Install Claude Code integration:"
       say "       bin/rails generate rails_informant:skill"
       say ""
+      say "  4. Optional: capture browser JavaScript errors (importmap apps):"
+      say "       bin/rails generate rails_informant:browser"
+      say ""
     end
 
     private
