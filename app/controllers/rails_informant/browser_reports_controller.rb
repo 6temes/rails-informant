@@ -13,20 +13,12 @@ module RailsInformant
       def self.increment(...) = BrowserReportsController.cache_store.increment(...)
     end
 
-    class_attribute :schema_warning_logged, default: false
+    class_attribute :schema_warning_logged, default: false, instance_accessor: false
 
     include SecurityHeaders
 
     # Parameter wrapping would parse the body before the size check.
     wrap_parameters false
-
-    # Instrumentation parses a JSON body and logs it as Parameters before any
-    # callback runs, so a declared oversize body is refused ahead of it.
-    def process_action(...)
-      return head :content_too_large if request.content_length.to_i > MAX_BODY_BYTES
-
-      super
-    end
 
     before_action :verify_same_origin!
     rate_limit to: 30, within: 1.minute, store: LiveCacheStore, with: -> { head :too_many_requests }
@@ -54,6 +46,14 @@ module RailsInformant
 
     private
 
+    # Instrumentation parses a JSON body and logs it as Parameters before any
+    # callback runs, so a declared oversize body is refused ahead of it.
+    def process_action(...)
+      return head :content_too_large if request.content_length.to_i > MAX_BODY_BYTES
+
+      super
+    end
+
     # Browsers set both headers and pages cannot forge them. Without
     # Sec-Fetch-Site (older browsers), Origin must name this app exactly.
     def verify_same_origin!
@@ -65,7 +65,7 @@ module RailsInformant
     def require_browser_schema!
       return if RailsInformant.browser_schema_ready?
 
-      unless schema_warning_logged
+      unless self.class.schema_warning_logged
         self.class.schema_warning_logged = true
         Rails.logger.warn "[RailsInformant] Browser reports rejected: run `bin/rails generate rails_informant:browser` and migrate to add the browser capture columns"
       end

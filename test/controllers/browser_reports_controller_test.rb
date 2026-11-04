@@ -16,6 +16,10 @@ class RailsInformant::BrowserReportsControllerTest < ActionDispatch::Integration
     RailsInformant::BrowserReportsController.cache_store = @cache_store
   end
 
+  test "create is the only action, so host route audits see no unrouted ones" do
+    assert_equal Set["create"], RailsInformant::BrowserReportsController.action_methods
+  end
+
   test "a same-origin report is recorded as one browser group and occurrence" do
     assert_difference -> { RailsInformant::ErrorGroup.count } => 1,
                       -> { RailsInformant::Occurrence.count } => 1 do
