@@ -2,6 +2,7 @@ require "rails_informant/version"
 require "rails_informant/configuration"
 
 module RailsInformant
+  BrowserGroupLimitReached = Class.new(StandardError)
   InvalidParameterError = Class.new(StandardError)
   NotifierError = Class.new(StandardError)
 
@@ -25,6 +26,10 @@ module RailsInformant
 
   autoload :BreadcrumbBuffer, "rails_informant/breadcrumb_buffer"
   autoload :BreadcrumbSubscriber, "rails_informant/breadcrumb_subscriber"
+  autoload :BrowserContext, "rails_informant/browser_context"
+  autoload :BrowserError, "rails_informant/browser_error"
+  autoload :BrowserFingerprint, "rails_informant/browser_fingerprint"
+  autoload :BrowserReport, "rails_informant/browser_report"
   autoload :ClaudeIntegrationContent, "rails_informant/claude_integration_content"
   autoload :ContextBuilder, "rails_informant/context_builder"
   autoload :ContextFilter, "rails_informant/context_filter"
@@ -35,6 +40,7 @@ module RailsInformant
   autoload :Event, "rails_informant/event"
   autoload :Fingerprint, "rails_informant/fingerprint"
   autoload :Integration, "rails_informant/integration"
+  autoload :JavascriptStack, "rails_informant/javascript_stack"
   autoload :JobExecutionContext, "rails_informant/job_execution_context"
   autoload :StructuredEventSubscriber, "rails_informant/structured_event_subscriber"
 
@@ -56,6 +62,8 @@ module RailsInformant
   class << self
     delegate :app_name,
              :api_token,
+             :browser_new_group_limit,
+             :capture_browser_errors,
              :capture_errors,
              :capture_user_email,
              :ignored_exceptions,
@@ -72,6 +80,7 @@ module RailsInformant
     end
 
     def reset_caches!
+      @_browser_schema_ready = nil
       @_initialized = nil
       @_ignored_set = nil
       config.reset_notifiers!
@@ -83,6 +92,18 @@ module RailsInformant
       @_initialized = capture_errors && defined?(ActiveRecord::Base) && ActiveRecord::Base.connection_pool.with_connection { true }
     rescue ActiveRecord::ConnectionNotEstablished, ActiveRecord::NoDatabaseError
       false
+    end
+
+    # Hosts that bump the gem before running the browser capture migration
+    # still record server errors: the recorder rescues and logs, so writing an
+    # unknown attribute would silently drop every one of them.
+    def browser_schema_ready?
+      if @_browser_schema_ready.nil?
+        @_browser_schema_ready = ErrorGroup.column_names.include?("source") &&
+          Occurrence.column_names.include?("request_id") &&
+          Occurrence.column_names.include?("failing_request_id")
+      end
+      @_browser_schema_ready
     end
 
     def ignored_exception?(exception)
@@ -102,10 +123,17 @@ module RailsInformant
 
     def ignored_path?(env)
       return false unless env
-      paths = ignored_paths
-      return false if paths.empty?
-      request_path = env["PATH_INFO"]
-      paths.any? { request_path == it || request_path&.start_with?("#{it}/") }
+      ignored_request_path? env["PATH_INFO"]
+    end
+
+    def ignored_request_path?(path)
+      ignored_paths.any? { path == it || path&.start_with?("#{it}/") }
+    end
+
+    # Browser errors have no Ruby class to walk, so the stored JS:: name is
+    # matched as a plain string.
+    def ignored_error_class?(error_class)
+      ignored_exception_set.include?(error_class)
     end
 
     def current_git_sha

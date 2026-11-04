@@ -31,6 +31,19 @@ module RailsInformant
           ListErrors.call(server_context: @server_context, status: "duplicate")
         end
 
+        def test_passes_source_filter_to_client
+          @client.expects(:list_errors).with(source: "browser").returns(paginated([]))
+
+          ListErrors.call(server_context: @server_context, source: "browser")
+        end
+
+        def test_schema_offers_source_filter
+          source = ListErrors.input_schema.to_h.dig(:properties, :source)
+
+          assert_equal %w[browser server], source[:enum]
+          assert_match(/both/, source[:description])
+        end
+
         def test_uses_specified_environment
           staging_client = Client.new(url: "https://staging.example.com", token: "staging-token")
           staging_client.stubs(:list_errors).returns(paginated([]))

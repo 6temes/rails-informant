@@ -1,4 +1,8 @@
 RailsInformant::Engine.routes.draw do
+  # Checked per request: the host enables capture in an initializer, which
+  # runs after the engine's routes are loaded.
+  resources :browser_reports, only: :create, constraints: ->(_) { RailsInformant.capture_browser_errors }
+
   namespace :api do
     scope "v1" do
       resources :errors, only: [ :index, :show, :update, :destroy ] do

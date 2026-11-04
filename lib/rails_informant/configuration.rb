@@ -1,6 +1,8 @@
 module RailsInformant
   class Configuration
-    attr_accessor :capture_errors,
+    attr_accessor :browser_new_group_limit,
+                  :capture_browser_errors,
+                  :capture_errors,
                   :capture_runner_errors,
                   :capture_user_email,
                   :api_token,
@@ -17,6 +19,8 @@ module RailsInformant
       @before_record_callbacks = []
       @api_token = ENV["INFORMANT_API_TOKEN"]
       @app_name = ENV["INFORMANT_APP_NAME"]
+      @browser_new_group_limit = ENV.fetch("INFORMANT_BROWSER_NEW_GROUP_LIMIT", "50").to_i
+      @capture_browser_errors = ENV["INFORMANT_CAPTURE_BROWSER_ERRORS"] == "true"
       @capture_errors = ENV.fetch("INFORMANT_CAPTURE_ERRORS", "true") != "false"
       @capture_runner_errors = ENV.fetch("INFORMANT_CAPTURE_RUNNER_ERRORS", "true") != "false"
       @capture_user_email = false

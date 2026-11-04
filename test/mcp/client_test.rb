@@ -111,6 +111,20 @@ module RailsInformant
         @client.status
       end
 
+      def test_list_errors_sends_source_filter
+        http = stub_connection
+        http.expects(:request).with { |req| req.path == "/informant/api/v1/errors?source=browser" }.returns(success_response)
+
+        @client.list_errors source: "browser"
+      end
+
+      def test_list_occurrences_sends_request_id_filter
+        http = stub_connection
+        http.expects(:request).with { |req| req.path == "/informant/api/v1/occurrences?request_id=req-123" }.returns(success_response)
+
+        @client.list_occurrences request_id: "req-123"
+      end
+
       private
 
       def stub_connection

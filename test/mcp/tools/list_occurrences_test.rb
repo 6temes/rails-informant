@@ -26,6 +26,19 @@ module RailsInformant
           ListOccurrences.call(server_context: @server_context, error_group_id: 1, since: "2026-03-01T00:00:00Z")
         end
 
+        def test_passes_request_id_filter_to_client
+          @client.expects(:list_occurrences).with(request_id: "req-123").returns(paginated([]))
+
+          ListOccurrences.call(server_context: @server_context, request_id: "req-123")
+        end
+
+        def test_schema_offers_request_id_filter
+          request_id = ListOccurrences.input_schema.to_h.dig(:properties, :request_id)
+
+          assert_equal "string", request_id[:type]
+          assert_match(/failing_request_id/, request_id[:description])
+        end
+
         def test_returns_error_on_client_failure
           @client.stubs(:list_occurrences).raises(Client::Error.new("Connection failed"))
 

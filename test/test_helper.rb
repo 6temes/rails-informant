@@ -19,6 +19,7 @@ ActiveRecord::Schema.define do
       t.string :first_backtrace_line
       t.string :controller_action
       t.string :job_class
+      t.string :source, null: false, default: "server"
       t.integer :total_occurrences, default: 0, null: false
       t.references :duplicate_of, foreign_key: { to_table: :informant_error_groups }
       t.string :fix_sha
@@ -33,6 +34,7 @@ ActiveRecord::Schema.define do
       t.datetime :last_occurrence_stored_at
       t.timestamps
 
+      t.index [ :source, :status ]
       t.index [ :status, :last_seen_at ]
       t.index [ :status, :original_sha ]
       t.index [ :status, :resolved_at ]
@@ -59,7 +61,9 @@ ActiveRecord::Schema.define do
       t.json :custom_context
       t.json :environment_context
       t.json :breadcrumbs
+      t.string :failing_request_id, index: true
       t.string :git_sha
+      t.string :request_id, index: true
       t.timestamps
 
       t.index [ :error_group_id, :created_at ]

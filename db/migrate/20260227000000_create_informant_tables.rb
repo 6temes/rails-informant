@@ -9,6 +9,7 @@ class CreateInformantTables < ActiveRecord::Migration[8.1]
       t.string :first_backtrace_line
       t.string :controller_action
       t.string :job_class
+      t.string :source, null: false, default: "server"
       t.integer :total_occurrences, default: 0, null: false
       t.references :duplicate_of, foreign_key: { to_table: :informant_error_groups }
       t.string :fix_sha
@@ -23,6 +24,7 @@ class CreateInformantTables < ActiveRecord::Migration[8.1]
       t.datetime :last_occurrence_stored_at
       t.timestamps
 
+      t.index [ :source, :status ]
       t.index [ :status, :last_seen_at ]
       t.index [ :status, :original_sha ]
       t.index [ :status, :resolved_at ]
@@ -55,7 +57,9 @@ class CreateInformantTables < ActiveRecord::Migration[8.1]
       t.jsonb :custom_context
       t.jsonb :environment_context
       t.jsonb :breadcrumbs
+      t.string :failing_request_id, index: true
       t.string :git_sha
+      t.string :request_id, index: true
       t.timestamps
 
       t.index [ :error_group_id, :created_at ]

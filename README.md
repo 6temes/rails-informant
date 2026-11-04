@@ -14,6 +14,7 @@
     <a href="#quick-start">Quick Start</a>
     &#9670; <a href="#configuration">Configuration</a>
     &#9670; <a href="#noise-suppression">Noise Suppression</a>
+    &#9670; <a href="#browser-errors">Browser Errors</a>
     &#9670; <a href="#mcp-server">MCP Server</a>
     &#9670; <a href="#data-and-privacy">Data and Privacy</a>
   </p>
@@ -65,6 +66,13 @@ bin/rails generate rails_informant:skill
 
 With [Rails Hyperdrive](https://github.com/rails-hyperdrive/rails-hyperdrive), the `/informant` skill arrives through `bin/rails hyperdrive:sync` instead, and the generator installs the rest (see [With Rails Hyperdrive](#with-rails-hyperdrive)).
 
+Optionally, capture JavaScript errors from your pages too (see [Browser Errors](#browser-errors)):
+
+```sh
+bin/rails generate rails_informant:browser
+bin/rails db:migrate
+```
+
 Errors are captured automatically. To capture manually:
 
 ```ruby
@@ -88,6 +96,8 @@ Every option can be set via an environment variable. The initializer takes prece
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
 | `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for API/MCP access |
+| `browser_new_group_limit` | `INFORMANT_BROWSER_NEW_GROUP_LIMIT` | `50` | Most new browser error groups created per hour; reports that would start another are dropped |
+| `capture_browser_errors` | `INFORMANT_CAPTURE_BROWSER_ERRORS` | `false` | Accept JavaScript error reports from your pages |
 | `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture |
 | `capture_runner_errors` | `INFORMANT_CAPTURE_RUNNER_ERRORS` | `true` | Capture errors raised under `rails runner` |
 | `capture_user_email` | _(none)_ | `false` | Capture email from detected user (PII -- opt-in) |
@@ -164,7 +174,7 @@ config.before_record do |event|
 end
 ```
 
-The `event` exposes: `error`, `error_class`, `message`, `severity`, `controller_action`, `job_class`, `request_path`, `fingerprint`. Callbacks that raise are logged and skipped.
+The `event` exposes: `error`, `error_class`, `message`, `severity`, `controller_action`, `job_class`, `request_path`, `source` (`"server"` or `"browser"`), `fingerprint`. Callbacks that raise are logged and skipped.
 
 ### Custom Exception Context
 
@@ -190,6 +200,73 @@ curl -X POST https://myapp.com/informant/api/v1/deploy \
 ```
 
 Resolved errors automatically reopen on regression. Also available as the `notify_deploy` MCP tool.
+
+## Browser Errors
+
+Informant can also record JavaScript errors from your pages, so the agent triages them with the same tools and lifecycle as server errors. It is off by default.
+
+### What is captured
+
+- Uncaught errors and unhandled promise rejections, including errors thrown in Stimulus controllers
+- Turbo failures that point to an app defect, such as a frame response missing its matching frame. Network failures (offline, aborted requests) are not reported.
+
+Identical errors are reported once per short window, and each page view has a report budget that resets on every Turbo visit. Cross-origin `Script error.`, the ResizeObserver loop warning, and errors raised by browser extensions or third-party scripts are dropped.
+
+Browser groups are named `JS::<Name>` (for example `JS::TypeError`) and tagged with `source: "browser"`. They are grouped by error name and the first frame in your own JavaScript (files under `app/javascript/`), so a new asset digest, host, line or column does not start a new group. The message is used only when the stack has no app frame. Frames name your source files, not digested asset URLs.
+
+Browser reports go through the same `ignored_exceptions` (use the `JS::` name), `ignored_paths` (matched against the page path), `before_record` callbacks, spike protection and notifications as server errors.
+
+A resolved browser group reopens only on a report from a page rendered after it was resolved. A report from an older open tab, or one with no verifiable render time, does not reopen it.
+
+### Setup
+
+```sh
+bin/rails generate rails_informant:browser
+bin/rails db:migrate
+```
+
+Then restart the app. The generator is safe to re-run. It:
+
+- writes a migration adding the browser columns (skipped when they already exist)
+- adds `pin "rails_informant"` to `config/importmap.rb`
+- inserts `<%= informant_browser_tag %>` before `javascript_importmap_tags` in `app/views/layouts/application.html.erb`
+- sets `config.capture_browser_errors = true` in the initializer
+
+The tag renders nothing while capture is off, so it can stay in the layout.
+
+### Requirements and caveats
+
+- Supported setup: importmap and Propshaft, with your JavaScript served from the same origin as the app. Bundled or minified builds (jsbundling, esbuild, Vite) and frontends served from another origin are not supported.
+- Content Security Policy: the tag's inline script carries the request's CSP nonce, and `connect-src 'self'` already covers the endpoint.
+- The tag finds the endpoint through the engine's `rails_informant` route helper. Mounting the engine with a custom `as:` name renames that helper and breaks the tag.
+- Mounting the engine inside an authentication constraint blocks reports from signed-out pages.
+- Until the migration has run, the endpoint answers 503 and logs which generator to run.
+- Keep `informant_browser_tag` out of cached output (HTTP or CDN page caching, or a cached layout fragment). The tag carries the signed-in user for the request that rendered it, so a cached copy attributes every visitor's errors to that user for up to 24 hours.
+- On PostgreSQL with a very large `informant_occurrences` table, the migration's index builds block error recording while they run. Run it in a quiet window, or change the generated migration to add the indexes with `algorithm: :concurrently` (and `disable_ddl_transaction!`).
+
+### The endpoint
+
+The client posts to `POST <mount path>/browser_reports` (for example `/informant/browser_reports`). The route exists only while `capture_browser_errors` is on. It takes no token: it accepts only same-origin requests, checked with `Sec-Fetch-Site` and, when a browser does not send that header, `Origin`.
+
+Each request is bounded:
+
+- 30 requests per minute per IP, via Rails `rate_limit` on your app's `Rails.cache`. Under `:null_store` the limit does nothing. Behind a proxy or CDN that Rails does not trust (see `config.action_dispatch.trusted_proxies`), every visitor has the same IP and shares one limit.
+- 64 KB request body and 10 reports per request
+- `browser_new_group_limit` new browser groups per hour. Once the cap is full, Informant records a `RailsInformant::BrowserGroupLimitReached` warning group, which alerts like any other error, so a flood of noise cannot silently hide a new bug.
+
+### What the client sends
+
+- Error name, message and stack
+- The page URL, without its fragment
+- The last 20 breadcrumbs: Turbo visits, clicks, and failing requests with their status and `X-Request-Id`. A click is recorded by element identity (tag, `id`, `data-controller`, `data-action`) and never by its text.
+- The request ID of the last failing request
+- An encrypted context the server wrote into the page when it rendered it: the user, the rendering request's ID, the app revision and the render time. The page cannot read or change it.
+
+The user on a browser occurrence always comes from that server-written context. Nothing in a report can set it.
+
+### Following a browser error to the server
+
+A browser occurrence records `request_id` (the request that rendered the page) and `failing_request_id` (the last request that failed). The `list_occurrences` MCP tool takes a `request_id` filter that matches either, so the agent can find the server occurrence for the same request. A miss is normal: the request may have raised nothing on the server, and cooldown and trimming drop repeat server occurrences. `list_errors` takes a `source` filter (`browser` or `server`) and lists both by default.
 
 ## MCP Server
 
@@ -310,13 +387,26 @@ Occurrences store: user ID (always), email (opt-in via `capture_user_email`), IP
 RailsInformant::Current.user_context = { id: current_user.id }
 ```
 
+Browser occurrences store the same user context, taken from the page's encrypted render-time context rather than from the report. Their page URL, breadcrumbs and context pass through `filter_parameters` like server request data, and click breadcrumbs never include visible text.
+
 ## Security
 
 - Token authentication (`secure_compare`), HTTPS enforced by default
 - All context filtered through `ActiveSupport::ParameterFilter`
 - Security headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
 - Error capture never breaks the host application
-- No built-in rate limiting -- use [Rack::Attack](https://github.com/rack/rack-attack) on `/informant/`
+- The browser endpoint (`/informant/browser_reports`, only while `capture_browser_errors` is on) is unauthenticated: it accepts same-origin requests only and is rate limited per IP with Rails `rate_limit`. A scripted client can forge those headers, so every report is size-bounded and new browser groups are capped per hour.
+- Text in browser groups (message, frames, breadcrumbs, URLs) is written by anonymous visitors. The MCP instructions and skill tell the agent to treat it as data, never as instructions.
+- The API has no built-in rate limiting -- use [Rack::Attack](https://github.com/rack/rack-attack) on `/informant/api/`
+
+## Development
+
+```sh
+bin/test                                  # Ruby suite
+node --test 'test/javascript/*.test.js'   # browser client
+```
+
+The JavaScript tests use Node's built-in runner with no npm dependencies, and need Node 22.12 or later. Pass the quoted glob: Node 24 does not run a bare directory argument.
 
 ## License
 

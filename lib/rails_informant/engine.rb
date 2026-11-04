@@ -2,6 +2,12 @@ module RailsInformant
   class Engine < ::Rails::Engine
     isolate_namespace RailsInformant
 
+    # Always included: the generator writes the tag into the host layout for
+    # good, and the helper itself returns nil while browser capture is off.
+    initializer "rails_informant.browser_helper" do
+      ActiveSupport.on_load(:action_view) { include RailsInformant::BrowserHelper }
+    end
+
     initializer "rails_informant.error_subscriber" do
       next unless RailsInformant.capture_errors
 
