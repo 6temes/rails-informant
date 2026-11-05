@@ -396,7 +396,7 @@ Browser occurrences store the same user context, taken from the page's encrypted
 - Security headers: `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`
 - Error capture never breaks the host application
 - The browser endpoint (`/informant/browser_reports`, only while `capture_browser_errors` is on) is unauthenticated: it accepts same-origin requests only and is rate limited per IP with Rails `rate_limit`. A scripted client can forge those headers, so every report is size-bounded and new browser groups are capped per hour.
-- Text in browser groups (message, frames, breadcrumbs, URLs) is written by anonymous visitors. The MCP instructions and skill tell the agent to treat it as data, never as instructions.
+- Text in browser groups (message, frames, breadcrumbs, URLs) is written by anonymous visitors. The MCP instructions and skill tell the agent to treat it as data, never as instructions, and the MCP instructions have the agent ask you before it edits files, commits, opens a PR or runs commands beyond read-only git and your tests for work that started from a browser group.
 - The API has no built-in rate limiting -- use [Rack::Attack](https://github.com/rack/rack-attack) on `/informant/api/`
 
 ## Development
