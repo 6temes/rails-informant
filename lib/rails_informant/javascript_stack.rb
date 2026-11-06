@@ -11,8 +11,9 @@ module RailsInformant
     MAX_FRAMES = 50
     V8_FRAME = /\A\s*at (?:(?<function>.+?) \()?(?<url>\S+?):(?<line>\d+):(?<column>\d+)\)?\z/
 
-    Frame = Data.define(:app, :column, :function, :line, :path) do
+    Frame = Data.define(:app, :column, :function, :line, :path, :same_origin) do
       alias_method :app?, :app
+      alias_method :same_origin?, :same_origin
 
       def fingerprint_key = "#{path}:#{function}"
 
@@ -49,28 +50,31 @@ module RailsInformant
       match = V8_FRAME.match(line) || FIREFOX_FRAME.match(line)
       return unless match
 
-      path, app = resolve(match[:url])
-      Frame.new app:, column: match[:column].to_i, function: self.class.normalize_function(match[:function]), line: match[:line].to_i, path:
+      path, app, same_origin = resolve(match[:url])
+      Frame.new app:, column: match[:column].to_i, function: self.class.normalize_function(match[:function]), line: match[:line].to_i, path:, same_origin:
     end
 
     # A stack repeats the same few script URLs, and each miss costs an asset
     # lookup, so misses are cached too.
     def resolve(url)
       (@_resolved ||= {})[url] ||= begin
-        source = app_source_for(url)
-        source ? [ source, source.start_with?(APP_SOURCE_PREFIX) ] : [ url, false ]
+        uri = same_origin_uri(url)
+        source = uri && app_source_for(uri)
+        source ? [ source, source.start_with?(APP_SOURCE_PREFIX), true ] : [ url, false, uri.present? ]
       end
     end
 
-    def app_source_for(url)
+    def same_origin_uri(url)
       uri = URI.parse(url)
-      return unless uri.is_a?(URI::HTTP) && origin_of(uri) == origin
+      uri if uri.is_a?(URI::HTTP) && origin_of(uri) == origin
+    rescue URI::InvalidURIError
+      nil
+    end
 
+    def app_source_for(uri)
       asset = find_asset(uri.path)
       relative = asset&.path.to_s.delete_prefix("#{Rails.root}/")
       relative if asset && relative != asset.path.to_s
-    rescue URI::InvalidURIError
-      nil
     end
 
     def find_asset(url_path)

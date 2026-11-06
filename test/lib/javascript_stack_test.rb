@@ -88,6 +88,44 @@ class RailsInformant::JavascriptStackTest < ActiveSupport::TestCase
     assert_equal "app/javascript/controllers/cart_controller.js:add", stack.first_app_frame.fingerprint_key
   end
 
+  test "same-origin does not depend on the asset lookup" do
+    stack = parse <<~STACK
+          at Chart.draw (chrome-extension://abcdefghijklmnop/content.js:1:100)
+          at Chart.render (https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js:13:2000)
+          at Chart.update (https://shop.example/assets/chart-0a1b2c3d.js:5:10)
+          at Session.visit (https://shop.example/assets/turbo.min-4e5f6a7b.js:1:500)
+          at CartController.connect (https://evil.example/assets/controllers/cart_controller-3a1b2c4d.js:1:1)
+          at async CartController.add (https://shop.example/assets/controllers/cart_controller-3a1b2c4d.js:42:15)
+    STACK
+
+    assert_equal [ false, false, true, true, false, true ], stack.frames.map(&:same_origin?)
+    assert_equal [ false, false, false, false, false, true ], stack.frames.map(&:app?)
+  end
+
+  test "page HTML and bundles outside the assets prefix are same-origin" do
+    page = parse("@https://shop.example/cart:519:344").frames.first
+    vite = parse("@https://shop.example/vite/assets/app-abc123.js:1:4521").frames.first
+
+    assert page.same_origin?
+    assert_not page.app?
+    assert_equal "https://shop.example/cart", page.path
+    assert vite.same_origin?
+  end
+
+  test "frames are same-origin when the host has no Propshaft load path" do
+    Rails.application.stubs(:assets).returns(nil)
+    frame = parse("    at go (https://shop.example/assets/controllers/cart_controller-3a1b2c4d.js:1:2)").frames.first
+
+    assert frame.same_origin?
+    assert_not frame.app?
+  end
+
+  test "a blob worker URL is not same-origin" do
+    frame = parse("@blob:https://shop.example/5f3a9c2e-1b4d-4e8f-a6c7-9d0e1f2a3b4c:1:1").frames.first
+
+    assert_not frame.same_origin?
+  end
+
   test "a stack with more than 50 frames is truncated to 50" do
     lines = 60.times.map { "    at f#{it} (https://shop.example/assets/application-9f8e7d6c.js:#{it + 1}:1)" }
     stack = parse lines.join("\n")
