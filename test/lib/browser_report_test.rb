@@ -103,6 +103,68 @@ class RailsInformant::BrowserReportTest < ActiveSupport::TestCase
     assert_operator report.occurrence_attributes[:backtrace].sum(&:length), :<=, RailsInformant::BrowserReport::MAX_STACK_LENGTH
   end
 
+  test "reports with no first-party frame are silenced as third-party" do
+    {
+      "iOS injected script" => { "name" => "RangeError", "message" => "Maximum call stack size exceeded.", "stack" => "@\nzk@\nxk@\n@\nzk@\nxk@" },
+      "minified injected script" => { "name" => "Error", "message" => "ra", "stack" => "uh@\nGi@\n@" },
+      "wallet setter on line 1 of the page" => { "stack" => "@https://shop.example/cart:1:16" },
+      "extension error with no stack" => { "name" => "Error", "message" => "Invalid call to runtime.sendMessage(). Tab not found.", "stack" => "" },
+      "extension frame" => { "stack" => "    at go (chrome-extension://abcdefghijklmnop/content.js:1:100)" },
+      "app inline script on line 1 after a Turbo visit" => { "stack" => "@https://shop.example/checkout:1:5", "url" => "https://shop.example/checkout" }
+    }.each do |label, overrides|
+      attrs = build(**overrides).group_attributes(now: Time.current)
+
+      assert_equal "ignored", attrs[:status], label
+      assert_equal RailsInformant::BrowserReport::THIRD_PARTY_NOTES, attrs[:notes], label
+    end
+  end
+
+  test "a page frame on line 1 is matched by path with the query ignored" do
+    assert_equal RailsInformant::BrowserReport::THIRD_PARTY, build("stack" => "@https://shop.example/cart?step=1:1:16").silenced_reason
+  end
+
+  test "a line-1 frame on a page visited earlier in the session is a page frame" do
+    report = build(
+      "breadcrumbs" => [ { "category" => "turbo.visit", "message" => "/cart?step=2" } ],
+      "stack" => "@https://shop.example/cart:1:16",
+      "url" => "https://shop.example/checkout"
+    )
+
+    assert_equal RailsInformant::BrowserReport::THIRD_PARTY, report.silenced_reason
+  end
+
+  test "AbortError is silenced whatever its frames say" do
+    turbo = build("name" => "AbortError", "message" => "Fetch is aborted", "stack" => "abort@[native code]\n@https://shop.example/assets/turbo.min-4e5f6a7b.js:1:500")
+    app = build("name" => "AbortError", "message" => "Fetch is aborted")
+
+    [ turbo, app ].each do |report|
+      attrs = report.group_attributes(now: Time.current)
+      assert_equal "ignored", attrs[:status]
+      assert_equal RailsInformant::BrowserReport::ABORTED_FETCH_NOTES, attrs[:notes]
+      assert_includes attrs[:notes], "AbortError"
+    end
+  end
+
+  test "first-party reports are not silenced and carry no status or notes" do
+    {
+      "app controller" => {},
+      "inline script on real page lines" => { "name" => "Error", "message" => "Na", "stack" => "@https://shop.example/cart:519:344\n@https://shop.example/cart:198:221\n@https://shop.example/cart:199:338" },
+      "frame-missing Turbo error" => { "kind" => "turbo", "name" => "TurboFrameMissingError", "stack" => "" },
+      "rejection of a non-Error value" => { "kind" => "rejection", "name" => "Error", "message" => "[object Object]", "stack" => "" },
+      "Chrome syntax error with only the header line" => { "name" => "SyntaxError", "message" => "Unexpected token '}'", "stack" => "SyntaxError: Unexpected token '}'" },
+      "vendored pin" => { "stack" => "draw@https://shop.example/assets/chart-1a2b3c4d.js:9:1" },
+      "bundle outside the assets prefix" => { "stack" => "@https://shop.example/vite/assets/app-abc123.js:1:4521" },
+      "no kind with an app frame" => { "kind" => nil }
+    }.each do |label, overrides|
+      report = build(**overrides)
+      attrs = report.group_attributes(now: Time.current)
+
+      assert_nil report.silenced_reason, label
+      assert_not attrs.key?(:status), label
+      assert_not attrs.key?(:notes), label
+    end
+  end
+
   private
 
   def build(context: nil, **overrides)
