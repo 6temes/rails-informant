@@ -650,6 +650,104 @@ class RailsInformant::ErrorRecorderBrowserTest < ActiveSupport::TestCase
     end
   end
 
+  test "third-party and aborted-fetch reports are recorded as ignored groups and never notify" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    third_party = {
+      "iOS injected script" => { "name" => "RangeError", "message" => "Maximum call stack size exceeded.", "stack" => "@\nzk@\nxk@\n@\nzk@\nxk@" },
+      "minified injected script" => { "message" => "a.J", "stack" => "uh@\nGi@\n@" },
+      "wallet setter" => { "message" => "undefined is not an object (evaluating 'window.ethereum.selectedAddress = undefined')", "stack" => "@https://shop.example/cart:1:16" },
+      "extension with no stack" => { "name" => "Error", "message" => "Invalid call to runtime.sendMessage(). Tab not found.", "stack" => "" },
+      "wallet setter on a page visited earlier" => { "message" => "wallet", "stack" => "@https://shop.example/cart:1:16", "url" => "https://shop.example/checkout",
+                                                     "breadcrumbs" => [ { "category" => "turbo.visit", "message" => "/cart" } ] }
+    }
+    aborted = { "name" => "AbortError", "message" => "Fetch is aborted", "stack" => "abort@[native code]\n@https://shop.example/assets/turbo.min-4e5f6a7b.js:1:500" }
+
+    assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+      assert_difference -> { RailsInformant::ErrorGroup.where(status: "ignored").count } => 6,
+                        -> { RailsInformant::Occurrence.count } => 6 do
+        third_party.each_value { record_browser(**it) }
+        record_browser(**aborted)
+      end
+    end
+
+    notes = RailsInformant::ErrorGroup.where(status: "ignored").pluck(:error_class, :notes)
+    assert_equal 5, notes.count { it.last == RailsInformant::BrowserReport::THIRD_PARTY_NOTES }
+    assert_includes notes, [ "JS::AbortError", RailsInformant::BrowserReport::ABORTED_FETCH_NOTES ]
+  end
+
+  test "first-party reports with page frames, Turbo frame errors and syntax errors are unresolved and notify" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    assert_enqueued_jobs 3, only: RailsInformant::NotifyJob do
+      record_browser "name" => "Error", "message" => "Na", "stack" => "@https://shop.example/cart:519:344\n@https://shop.example/cart:198:221"
+      record_browser "kind" => "turbo", "name" => "TurboFrameMissingError", "message" => "The response did not contain the expected frame", "stack" => ""
+      record_browser "name" => "SyntaxError", "message" => "Unexpected token '}'", "stack" => "SyntaxError: Unexpected token '}'"
+    end
+
+    assert_equal [ "unresolved" ], RailsInformant::ErrorGroup.distinct.pluck(:status)
+  end
+
+  test "a repeated silenced report increments its ignored group without notifying" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser "message" => "a.J", "stack" => "uh@\nGi@\n@"
+
+    travel 1.minute do
+      assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+        record_browser "message" => "a.J", "stack" => "uh@\nGi@\n@"
+      end
+    end
+
+    group = RailsInformant::ErrorGroup.sole
+    assert_equal "ignored", group.status
+    assert_equal 2, group.total_occurrences
+    assert_equal 2, group.occurrences.count
+  end
+
+  test "a reopened silenced group stays unresolved on its next report and notifies" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser "message" => "a.J", "stack" => "uh@\nGi@\n@"
+    group = RailsInformant::ErrorGroup.sole
+    group.update! status: "unresolved"
+
+    assert_enqueued_with job: RailsInformant::NotifyJob do
+      record_browser "message" => "a.J", "stack" => "uh@\nGi@\n@"
+    end
+
+    assert_equal "unresolved", group.reload.status
+  end
+
+  test "a forged stackless report does not silence a later first-party report with the same message" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+    record_browser "stack" => ""
+
+    assert_enqueued_with job: RailsInformant::NotifyJob do
+      record_browser "stack" => "@https://shop.example/cart:57:3"
+    end
+
+    assert_equal %w[ignored unresolved], RailsInformant::ErrorGroup.order(:id).pluck(:status)
+  end
+
+  test "a callback that sends a silenced report to an existing group leaves that group's status alone" do
+    record_browser
+    first_party = RailsInformant::ErrorGroup.sole
+    RailsInformant.config.before_record { it.fingerprint = first_party.fingerprint }
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser "stack" => ""
+    end
+
+    assert_equal "unresolved", first_party.reload.status
+    assert_equal 2, first_party.total_occurrences
+  end
+
+  test "an ignored AbortError class drops the report instead of silencing it" do
+    RailsInformant.config.ignored_exceptions = [ "JS::AbortError" ]
+
+    assert_no_difference -> { RailsInformant::ErrorGroup.count } do
+      record_browser "name" => "AbortError", "message" => "Fetch is aborted", "stack" => ""
+    end
+  end
+
   test "spike protection applies to browser groups" do
     RailsInformant.config.spike_protection = { threshold: 2, window: 1.minute }
 
