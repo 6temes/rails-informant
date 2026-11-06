@@ -132,6 +132,12 @@ vanishing silently.
 Add your own classes with `config.ignored_exceptions`; it still walks the cause chain, so
 ignoring a class also ignores exceptions that wrap it.
 
+### Third-Party Browser Errors
+
+Browser errors from extensions, in-app browsers and injected scripts are recorded as `ignored` groups, so they stay visible in `list_errors` but never post to Slack or a webhook. Their notes say why, starting with `Auto-ignored:`, which tells them apart from groups a person ignored. The rules are under [What is captured](#what-is-captured).
+
+If one of them is your own bug, reopen it with `reopen_error` or `PATCH /informant/api/v1/errors/:id` with `{"status": "unresolved"}`. Later reports keep it open and notify as usual. A purged or deleted group comes back as `ignored` on its next report.
+
 ### Interactive Console
 
 Informant never captures errors raised in an interactive `rails console` session -- nothing
@@ -208,9 +214,17 @@ Informant can also record JavaScript errors from your pages, so the agent triage
 ### What is captured
 
 - Uncaught errors and unhandled promise rejections, including errors thrown in Stimulus controllers
-- Turbo failures that point to an app defect, such as a frame response missing its matching frame. Network failures (offline, aborted requests) are not reported.
+- Turbo failures that point to an app defect, such as a frame response missing its matching frame. Network failures (offline, aborted requests) are not reported. An aborted fetch that still surfaces as an `AbortError` is recorded as an `ignored` group and never notifies.
 
-Identical errors are reported once per short window, and each page view has a report budget that resets on every Turbo visit. Cross-origin `Script error.`, the ResizeObserver loop warning, and errors raised by browser extensions or third-party scripts are dropped.
+Identical errors are reported once per short window, and each page view has a report budget that resets on every Turbo visit. The client drops cross-origin `Script error.`, the ResizeObserver loop warning, and reports whose top frame comes from another origin.
+
+The server records every other report, but errors from browser extensions and injected scripts land as `ignored` groups that never notify (see [Third-Party Browser Errors](#third-party-browser-errors)):
+
+- A report is third-party when none of its frames comes from your origin, or when its only same-origin frames are on line 1 of the page, where extensions and in-app browsers inject their scripts.
+- A report with no frames is third-party when its stack has lines that are not frames, or when it is an uncaught error with no stack at all. Frameless promise rejections and Turbo failures stay loud, and so does a stack holding only the error's own header line, which is how Chrome reports a syntax error.
+- `JS::AbortError` is always silenced.
+
+Two limits come with this. An error on line 1 of the page is silenced even when it is yours: that covers pages whose HTML is minified onto one line, and your own inline scripts after a Turbo visit, because Turbo re-creates them and their line numbers then count from the start of the script. And silenced groups count toward `browser_new_group_limit`, so a flood of distinct third-party errors can fill the hourly cap.
 
 Browser groups are named `JS::<Name>` (for example `JS::TypeError`) and tagged with `source: "browser"`. They are grouped by error name and the first frame in your own JavaScript (files under `app/javascript/`), so a new asset digest, host, line or column does not start a new group. The message is used only when the stack has no app frame. Frames name your source files, not digested asset URLs.
 
@@ -252,7 +266,7 @@ Each request is bounded:
 
 - 30 requests per minute per IP, via Rails `rate_limit` on your app's `Rails.cache`. Under `:null_store` the limit does nothing. Behind a proxy or CDN that Rails does not trust (see `config.action_dispatch.trusted_proxies`), every visitor has the same IP and shares one limit.
 - 64 KB request body and 10 reports per request
-- `browser_new_group_limit` new browser groups per hour. Once the cap is full, Informant records a `RailsInformant::BrowserGroupLimitReached` warning group, which alerts like any other error, so a flood of noise cannot silently hide a new bug.
+- `browser_new_group_limit` new browser groups per hour. Once the cap is full, Informant records a `RailsInformant::BrowserGroupLimitReached` warning group, which alerts like any other error, so a flood of noise cannot silently hide a new bug. Silenced third-party groups count toward the cap too.
 
 ### What the client sends
 
@@ -375,6 +389,7 @@ Development Machine                    Remote Servers
 unresolved --> fix_pending --> resolved (auto, on deploy)
 unresolved --> resolved (manual)
 unresolved --> ignored
+(new)       --> ignored (third-party browser report)
 unresolved --> duplicate
 resolved    --> unresolved [REGRESSION]
 ```
