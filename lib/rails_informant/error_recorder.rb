@@ -47,7 +47,7 @@ module RailsInformant
         return if RailsInformant.ignored_error_class?(browser_report.error_class)
 
         attrs = browser_report.group_attributes(now: Time.current)
-        fingerprint = BrowserFingerprint.generate(error_class: attrs[:error_class], message: attrs[:message], stack: browser_report.stack)
+        fingerprint = BrowserFingerprint.generate(error_class: attrs[:error_class], message: attrs[:message], silenced_reason: browser_report.silenced_reason, stack: browser_report.stack)
 
         event = run_before_record_callbacks(browser_report.error, attrs, fingerprint:, request_path: browser_report.page_path, source: "browser")
         return if event.halted?

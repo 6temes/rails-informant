@@ -64,10 +64,22 @@ class RailsInformant::BrowserFingerprintTest < ActiveSupport::TestCase
     assert_not_equal RailsInformant::Fingerprint.generate(TypeError.new("boom")), fingerprint("boom", "")
   end
 
+  test "a first-party fingerprint keeps its existing format" do
+    assert_equal Digest::SHA256.hexdigest("browser:JS::TypeError:app/javascript/controllers/cart_controller.js:connect"),
+      fingerprint("boom", "connect@#{CART}:42:15")
+  end
+
+  test "a silenced report never shares a group with a first-party report of the same error" do
+    silenced = fingerprint("boom 1", "", silenced_reason: RailsInformant::BrowserReport::THIRD_PARTY)
+
+    assert_not_equal fingerprint("boom 1", "@https://shop.example/cart:57:3"), silenced
+    assert_equal silenced, fingerprint("boom 2", "", silenced_reason: RailsInformant::BrowserReport::THIRD_PARTY)
+  end
+
   private
 
-  def fingerprint(message, stack, error_class: "JS::TypeError")
-    RailsInformant::BrowserFingerprint.generate error_class:, message:,
+  def fingerprint(message, stack, error_class: "JS::TypeError", silenced_reason: nil)
+    RailsInformant::BrowserFingerprint.generate error_class:, message:, silenced_reason:,
       stack: RailsInformant::JavascriptStack.parse(stack, origin: ORIGIN)
   end
 end

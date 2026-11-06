@@ -9,9 +9,10 @@ module RailsInformant
     # The message is left out when an app frame exists because browsers word
     # the same failure differently, which would split one bug into a group
     # per engine.
-    def self.generate(error_class:, message:, stack:)
+    def self.generate(error_class:, message:, silenced_reason:, stack:)
       key = stack.first_app_frame&.fingerprint_key || normalize_message(message)
-      Digest::SHA256.hexdigest "browser:#{error_class}:#{key}"
+      marker = ":silenced-#{silenced_reason}" if silenced_reason
+      Digest::SHA256.hexdigest "browser#{marker}:#{error_class}:#{key}"
     end
 
     def self.normalize_message(message)

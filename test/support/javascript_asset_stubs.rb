@@ -19,7 +19,8 @@ module JavascriptAssetStubs
     assets = [
       StubAsset.new(logical_path: Pathname("controllers/cart_controller.js"), path: Rails.root.join("app/javascript/controllers/cart_controller.js")),
       StubAsset.new(logical_path: Pathname("controllers/search_controller.js"), path: Rails.root.join("app/javascript/controllers/search_controller.js")),
-      StubAsset.new(logical_path: Pathname("chart.js"), path: Rails.root.join("vendor/javascript/chart.js"))
+      StubAsset.new(logical_path: Pathname("chart.js"), path: Rails.root.join("vendor/javascript/chart.js")),
+      StubAsset.new(logical_path: Pathname("turbo.min.js"), path: Pathname("/gems/turbo-rails/app/assets/javascripts/turbo.min.js"))
     ]
     Rails.application.stubs(:assets).returns(stub(load_path: StubLoadPath.new(assets)))
     Rails.application.config.stubs(:assets).returns(ActiveSupport::OrderedOptions.new.merge!(prefix: "/assets"))
