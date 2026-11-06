@@ -9,10 +9,6 @@ module RailsInformant
     # The message is left out when an app frame exists because browsers word
     # the same failure differently, which would split one bug into a group
     # per engine.
-    #
-    # Silenced reports get their own marker so a forged stackless report can
-    # never claim the group a first-party bug with the same message would
-    # join, and first-party fingerprints stay unchanged.
     def self.generate(error_class:, message:, silenced_reason:, stack:)
       key = stack.first_app_frame&.fingerprint_key || normalize_message(message)
       marker = ":silenced-#{silenced_reason}" if silenced_reason

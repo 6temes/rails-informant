@@ -76,15 +76,17 @@ module RailsInformant
 
     attr_reader :name, :page_url, :remote_ip, :report, :user_agent
 
-    # V8 starts error.stack with the error's own "Name: message" line, which
-    # is not a frame and would otherwise show up as the top of the backtrace.
     def backtrace
       ContextFilter.filter_backtrace(stack_lines.map { it.first(MAX_BACKTRACE_LINE_LENGTH) })
     end
 
+    # V8 starts error.stack with the error's own "Name: message" line, which
+    # is not a frame and would otherwise show up as the top of the backtrace.
     def stack_lines
-      lines = stack.backtrace
-      v8_header?(lines.first) ? lines.drop(1) : lines
+      @_stack_lines ||= begin
+        lines = stack.backtrace
+        v8_header?(lines.first) ? lines.drop(1) : lines
+      end
     end
 
     def v8_header?(line)
@@ -92,7 +94,7 @@ module RailsInformant
     end
 
     def breadcrumbs
-      Array(report["breadcrumbs"]).grep(Hash).first(MAX_BREADCRUMBS).map do |crumb|
+      @_breadcrumbs ||= Array(report["breadcrumbs"]).grep(Hash).first(MAX_BREADCRUMBS).map do |crumb|
         crumb = ContextFilter.filter(crumb.slice(*BREADCRUMB_KEYS))
         if URL_BREADCRUMB_CATEGORIES.include?(crumb["category"]) && crumb["message"].is_a?(String)
           crumb["message"] = ContextBuilder.filtered_url(crumb["message"])
@@ -104,13 +106,12 @@ module RailsInformant
     def classify(kind)
       return ABORTED_FETCH if error_class == ABORT_ERROR_CLASS
 
-      if stack.frames.any?
-        THIRD_PARTY if stack.frames.none? { first_party?(it) }
-      elsif stack_lines.any? || (stack.backtrace.empty? && kind == "error")
-        # A frameless rejection or Turbo report carries no source, so only an
-        # error event with no stack at all says the code was not the page's.
-        THIRD_PARTY
-      end
+      return THIRD_PARTY if stack.frames.any? && stack.frames.none? { first_party?(it) }
+      return if stack.frames.any?
+
+      # A frameless rejection or Turbo report carries no source, so only an
+      # error event with no stack at all says the code was not the page's.
+      THIRD_PARTY if stack_lines.any? || (stack.backtrace.empty? && kind == "error")
     end
 
     # Extensions and in-app browsers inject inline scripts that report line 1
@@ -120,7 +121,10 @@ module RailsInformant
     end
 
     def page_paths
-      @_page_paths ||= [ page_path, *breadcrumbs.filter_map { ContextBuilder.page_path(it["message"]) if it["category"] == "turbo.visit" && it["message"].is_a?(String) } ].compact
+      @_page_paths ||= begin
+        visits = breadcrumbs.select { it["category"] == "turbo.visit" && it["message"].is_a?(String) }
+        [ page_path, *visits.map { ContextBuilder.page_path(it["message"]) } ].compact
+      end
     end
 
     def silenced_attributes

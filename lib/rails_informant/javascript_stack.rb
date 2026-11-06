@@ -60,7 +60,7 @@ module RailsInformant
       (@_resolved ||= {})[url] ||= begin
         uri = same_origin_uri(url)
         source = uri && app_source_for(uri)
-        source ? [ source, source.start_with?(APP_SOURCE_PREFIX), true ] : [ url, false, uri.present? ]
+        source ? [ source, source.start_with?(APP_SOURCE_PREFIX), true ] : [ url, false, !uri.nil? ]
       end
     end
 
