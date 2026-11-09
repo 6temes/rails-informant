@@ -20,9 +20,15 @@ module RailsInformant
     MAX_REQUEST_ID_LENGTH = 255
     MAX_STACK_LENGTH = 20_000
     NAME_PATTERN = /\A[A-Z][A-Za-z0-9_]{0,63}\z/
+    REASONLESS_REJECTION = "reasonless_rejection"
+    REASONLESS_REJECTION_NOTES = "Auto-ignored: a promise was rejected with no reason, so there is no error to act on. Reopen to get notified."
     THIRD_PARTY = "third_party"
     THIRD_PARTY_NOTES = "Auto-ignored: no frame from this app's own JavaScript, so the error came from an extension or injected script. Reopen to get notified."
-    SILENCED_NOTES = { ABORTED_FETCH => ABORTED_FETCH_NOTES, THIRD_PARTY => THIRD_PARTY_NOTES }.freeze
+    SILENCED_NOTES = {
+      ABORTED_FETCH => ABORTED_FETCH_NOTES,
+      REASONLESS_REJECTION => REASONLESS_REJECTION_NOTES,
+      THIRD_PARTY => THIRD_PARTY_NOTES
+    }.freeze
 
     attr_reader :context, :error, :error_class, :message, :page_path, :silenced_reason, :stack
 
@@ -105,6 +111,7 @@ module RailsInformant
 
     def classify(kind)
       return ABORTED_FETCH if error_class == ABORT_ERROR_CLASS
+      return REASONLESS_REJECTION if reasonless_rejection?(kind)
 
       return THIRD_PARTY if stack.frames.any? && stack.frames.none? { first_party?(it) }
       return if stack.frames.any?
@@ -112,6 +119,12 @@ module RailsInformant
       # A frameless rejection or Turbo report carries no source, so only an
       # error event with no stack at all says the code was not the page's.
       THIRD_PARTY if stack_lines.any? || (stack.backtrace.empty? && kind == "error")
+    end
+
+    # The client reports an undefined or null rejection reason as a stackless
+    # Error with the message "undefined".
+    def reasonless_rejection?(kind)
+      kind == "rejection" && error_class == "JS::Error" && message == "undefined" && stack.backtrace.empty?
     end
 
     # Extensions and in-app browsers inject inline scripts that report line 1

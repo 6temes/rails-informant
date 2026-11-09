@@ -222,8 +222,9 @@ Identical errors are reported once per short window, and each page view has a re
 The server records every other report, but errors from browser extensions and injected scripts land as `ignored` groups that never notify (see [Third-Party Browser Errors](#third-party-browser-errors)):
 
 - A report is third-party when none of its frames comes from your origin, or when its only same-origin frames are on line 1 of the page, where extensions and in-app browsers inject their scripts.
-- A report with no frames is third-party when its stack has lines that are not frames, or when it is an uncaught error with no stack at all. Frameless promise rejections and Turbo failures stay loud, and so does a stack holding only the error's own header line, which is how Chrome reports a syntax error.
+- A report with no frames is third-party when its stack has lines that are not frames, or when it is an uncaught error with no stack at all. Turbo failures and frameless promise rejections that carry a reason stay loud, and so does a stack holding only the error's own header line, which is how Chrome reports a syntax error.
 - `JS::AbortError` is always silenced.
+- A promise rejected with no reason (`undefined` or `null`) is silenced: there is no error or stack to act on.
 
 Two limits come with this. An error on line 1 of the page is silenced even when it is yours: that covers pages whose HTML is minified onto one line, and your own inline scripts after a Turbo visit, because Turbo re-creates them and their line numbers then count from the start of the script. And silenced groups count toward `browser_new_group_limit`, so a flood of distinct third-party errors can fill the hourly cap.
 
