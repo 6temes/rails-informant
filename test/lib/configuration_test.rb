@@ -119,6 +119,17 @@ class RailsInformant::ConfigurationTest < ActiveSupport::TestCase
     ENV.delete("INFORMANT_CAPTURE_BROWSER_ERRORS")
   end
 
+  test "browser_inline_scripts defaults to true" do
+    assert_equal true, RailsInformant::Configuration.new.browser_inline_scripts
+  end
+
+  test "browser_inline_scripts reads false from ENV" do
+    ENV["INFORMANT_BROWSER_INLINE_SCRIPTS"] = "false"
+    assert_equal false, RailsInformant::Configuration.new.browser_inline_scripts
+  ensure
+    ENV.delete("INFORMANT_BROWSER_INLINE_SCRIPTS")
+  end
+
   test "browser_new_group_limit defaults to 50" do
     assert_equal 50, RailsInformant::Configuration.new.browser_new_group_limit
   end

@@ -96,6 +96,7 @@ Every option can be set via an environment variable. The initializer takes prece
 | Option | Env var | Default | Description |
 |--------|---------|---------|-------------|
 | `api_token` | `INFORMANT_API_TOKEN` | `nil` | Authentication token for API/MCP access |
+| `browser_inline_scripts` | `INFORMANT_BROWSER_INLINE_SCRIPTS` | `true` | Your pages run inline scripts of their own. Set to `false` to drop browser errors whose top frame is the page itself, which is where injected scripts report from |
 | `browser_new_group_limit` | `INFORMANT_BROWSER_NEW_GROUP_LIMIT` | `50` | Most new browser error groups created per hour; reports that would start another are dropped |
 | `capture_browser_errors` | `INFORMANT_CAPTURE_BROWSER_ERRORS` | `false` | Accept JavaScript error reports from your pages |
 | `capture_errors` | `INFORMANT_CAPTURE_ERRORS` | `true` | Enable/disable error capture |
@@ -216,13 +217,14 @@ Informant can also record JavaScript errors from your pages, so the agent triage
 - Uncaught errors and unhandled promise rejections, including errors thrown in Stimulus controllers
 - Turbo failures that point to an app defect, such as a frame response missing its matching frame. Network failures (offline, aborted requests) are not reported. An aborted fetch that still surfaces as an `AbortError` is recorded as an `ignored` group and never notifies.
 
-Identical errors are reported once per short window, and each page view has a report budget that resets on every Turbo visit. The client drops cross-origin `Script error.`, the ResizeObserver loop warning, and reports whose top frame comes from another origin.
+Identical errors are reported once per short window, and each page view has a report budget that resets on every Turbo visit. The client drops cross-origin `Script error.`, the ResizeObserver loop warning, reports whose top frame comes from another origin, and a `TypeError` whose message is exactly a browser's network-failure wording (`Load failed`, `Failed to fetch`, `NetworkError when attempting to fetch resource.`). With `browser_inline_scripts = false` it also drops reports whose top frame is a URL the page has had since it loaded, including pages reached by Turbo visits: scripts that browsers such as Chrome on iOS inject into the page report from there, but so would your own inline scripts, which is why it is off by default.
 
 The server records every other report, but errors from browser extensions and injected scripts land as `ignored` groups that never notify (see [Third-Party Browser Errors](#third-party-browser-errors)):
 
 - A report is third-party when none of its frames comes from your origin, or when its only same-origin frames are on line 1 of the page, where extensions and in-app browsers inject their scripts.
-- A report with no frames is third-party when its stack has lines that are not frames, or when it is an uncaught error with no stack at all. Frameless promise rejections and Turbo failures stay loud, and so does a stack holding only the error's own header line, which is how Chrome reports a syntax error.
+- A report with no frames is third-party when its stack has lines that are not frames, or when it is an uncaught error with no stack at all. Turbo failures and frameless promise rejections that carry a reason stay loud, and so does a stack holding only the error's own header line, which is how Chrome reports a syntax error.
 - `JS::AbortError` is always silenced.
+- A promise rejected with no reason (`undefined` or `null`) is silenced: there is no error or stack to act on.
 
 Two limits come with this. An error on line 1 of the page is silenced even when it is yours: that covers pages whose HTML is minified onto one line, and your own inline scripts after a Turbo visit, because Turbo re-creates them and their line numbers then count from the start of the script. And silenced groups count toward `browser_new_group_limit`, so a flood of distinct third-party errors can fill the hourly cap.
 

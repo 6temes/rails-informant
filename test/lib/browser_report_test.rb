@@ -145,6 +145,22 @@ class RailsInformant::BrowserReportTest < ActiveSupport::TestCase
     end
   end
 
+  test "a rejection with no reason is silenced, and one with a reason is not" do
+    reasonless = build("kind" => "rejection", "name" => "Error", "message" => "undefined", "stack" => "")
+    attrs = reasonless.group_attributes(now: Time.current)
+
+    assert_equal "ignored", attrs[:status]
+    assert_equal RailsInformant::BrowserReport::REASONLESS_REJECTION_NOTES, attrs[:notes]
+
+    {
+      "rejection with a string reason" => { "kind" => "rejection", "name" => "Error", "message" => "checkout failed", "stack" => "" },
+      "rejection with an Error that has an app frame" => { "kind" => "rejection", "name" => "Error", "message" => "undefined" },
+      "rejection with a TypeError reason" => { "kind" => "rejection", "name" => "TypeError", "message" => "undefined", "stack" => "" }
+    }.each do |label, overrides|
+      assert_nil build(**overrides).silenced_reason, label
+    end
+  end
+
   test "first-party reports are not silenced and carry no status or notes" do
     {
       "app controller" => {},

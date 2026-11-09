@@ -62,6 +62,22 @@ describe('isNoise', () => {
     assert.equal(isNoise({ error: {}, message: 'x', stack: thirdParty }, ORIGIN), true)
   })
 
+  test('drops engine network failures, matched exactly', () => {
+    for (const message of ['Load failed', 'Failed to fetch', 'NetworkError when attempting to fetch resource.']) {
+      assert.equal(isNoise({ error: {}, message, name: 'TypeError', stack: '' }, ORIGIN), true)
+    }
+    assert.equal(isNoise({ error: {}, message: 'Load failed: cart total', name: 'TypeError', stack: '' }, ORIGIN), false)
+    assert.equal(isNoise({ error: {}, message: 'Failed to fetch', name: 'Error', stack: '' }, ORIGIN), false)
+  })
+
+  test('drops a top frame on the document URL only when the app has no inline scripts', () => {
+    const stack = `Error: Ma\n    at Mi (${ORIGIN}/orders/2026-11:198:221)\n    at ${ORIGIN}/orders/2026-11:517:344`
+    const documentUrls = new Set([`${ORIGIN}/orders/2026-11`])
+    assert.equal(isNoise({ error: {}, message: 'Ma', stack }, ORIGIN, documentUrls), true)
+    assert.equal(isNoise({ error: {}, message: 'Ma', stack }, ORIGIN), false)
+    assert.equal(isNoise({ error: {}, message: 'boom', stack: APP_STACK }, ORIGIN, documentUrls), false)
+  })
+
   test('keeps app errors and Stimulus wrapper calls that carry the error', () => {
     assert.equal(isNoise({ error: {}, message: 'boom', stack: APP_STACK }, ORIGIN), false)
     assert.equal(isNoise({ error: new Error('boom'), message: 'boom', stack: '' }, ORIGIN), false)
@@ -198,6 +214,45 @@ describe('start', () => {
     win.onerror('Uncaught Error: x', 'chrome-extension://abc/inject.js', 3, 4, null)
     await settle()
     assert.equal(win.reportRequests().length, 0)
+  })
+
+  test('drops a network failure rejection that Turbo never saw', async () => {
+    const win = createWindow()
+    start(win)
+    win.dispatchEvent(rejection(Object.assign(new TypeError('Load failed'), { stack: '' })))
+    await settle()
+    assert.equal(win.reportRequests().length, 0)
+  })
+
+  test('drops an error thrown from the document URL once the app declares no inline scripts', async () => {
+    const win = createWindow()
+    win.metas['informant-browser-inline-scripts'] = 'false'
+    start(win)
+    win.onerror('Uncaught Error: Ma', 'https://app.test/cart?step=2', 517, 344, null)
+    throwIn(win, appError())
+    await settle()
+    assert.deepEqual(win.reports().map(it => it.message), ['boom'])
+  })
+
+  test('drops an error from a script injected on a page the document showed before a Turbo visit', async () => {
+    const win = createWindow()
+    win.metas['informant-browser-inline-scripts'] = 'false'
+    start(win)
+    win.location = new URL('https://app.test/orders?page=2')
+    dispatch(win.document, 'turbo:load', { detail: { url: 'https://app.test/orders?page=2' } })
+    win.onerror('Uncaught Error: Ma', 'https://app.test/cart?step=2', 517, 344, null)
+    win.onerror('Uncaught Error: Na', 'https://app.test/orders?page=2', 198, 221, null)
+    await settle()
+    assert.equal(win.reportRequests().length, 0)
+  })
+
+  test('reports an error thrown from the document URL while the app has inline scripts', async () => {
+    const win = createWindow()
+    win.metas['informant-browser-inline-scripts'] = 'true'
+    start(win)
+    win.onerror('Uncaught Error: Ma', 'https://app.test/cart?step=2', 517, 344, null)
+    await settle()
+    assert.equal(win.reports().length, 1)
   })
 
   test('chains a previously assigned window.onerror', () => {

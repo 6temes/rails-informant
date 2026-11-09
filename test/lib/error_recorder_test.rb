@@ -675,6 +675,16 @@ class RailsInformant::ErrorRecorderBrowserTest < ActiveSupport::TestCase
     assert_includes notes, [ "JS::AbortError", RailsInformant::BrowserReport::ABORTED_FETCH_NOTES ]
   end
 
+  test "a rejection with no reason is recorded as an ignored group and never notifies" do
+    RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
+
+    assert_no_enqueued_jobs only: RailsInformant::NotifyJob do
+      record_browser "kind" => "rejection", "name" => "Error", "message" => "undefined", "stack" => ""
+    end
+
+    assert_equal [ [ "ignored", RailsInformant::BrowserReport::REASONLESS_REJECTION_NOTES ] ], RailsInformant::ErrorGroup.pluck(:status, :notes)
+  end
+
   test "first-party reports with page frames, Turbo frame errors and syntax errors are unresolved and notify" do
     RailsInformant.config.slack_webhook_url = "https://hooks.slack.com/test"
 
