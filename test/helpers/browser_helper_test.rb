@@ -39,6 +39,15 @@ class RailsInformant::BrowserHelperTest < ActionView::TestCase
     assert_includes script.text, "import('rails_informant')"
   end
 
+  test "tells the client whether the app has inline scripts of its own" do
+    RailsInformant.config.capture_browser_errors = true
+
+    assert_includes HostController.render(inline: "<%= informant_browser_tag %>"), '<meta name="informant-browser-inline-scripts" content="true">'
+
+    RailsInformant.config.browser_inline_scripts = false
+    assert_includes HostController.render(inline: "<%= informant_browser_tag %>"), '<meta name="informant-browser-inline-scripts" content="false">'
+  end
+
   test "the early hook has no nonce attribute when the request has no CSP nonce" do
     RailsInformant.config.capture_browser_errors = true
 

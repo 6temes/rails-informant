@@ -27,6 +27,7 @@ module RailsInformant
       safe_join [
         tag.meta(name: "informant-browser", content: RailsInformant::BrowserContext.generate(request)),
         tag.meta(name: "informant-browser-endpoint", content: rails_informant.browser_reports_path),
+        tag.meta(name: "informant-browser-inline-scripts", content: RailsInformant.config.browser_inline_scripts.to_s),
         javascript_tag(EARLY_HOOK, nonce: true)
       ], "\n"
     end

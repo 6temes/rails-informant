@@ -7,6 +7,8 @@ const MAX_BODY = 60000
 const MAX_REPORTS = 10
 // Turbo's minified build mangles the error class name, so its rejection is recognised by this text.
 const FRAME_MISSING = 'did not contain the expected <turbo-frame'
+// WebKit, Chromium and Firefox wordings for a fetch the network dropped.
+const NETWORK_FAILURES = new Set(['Load failed', 'Failed to fetch', 'NetworkError when attempting to fetch resource.'])
 const V8_FRAME = /^\s*at (?:.+? \()?(\S+?):\d+:\d+\)?$/
 const FIREFOX_FRAME = /^\s*[^@]*@(.+):\d+:\d+$/
 
@@ -16,11 +18,13 @@ const topFrame = stack => String(stack).split('\n').find(frameUrl) || ''
 const withoutFragment = href => href.split('#')[0]
 const meta = (document, name) => document.querySelector(`meta[name="${name}"]`)?.content
 
-export const isNoise = ({ error, message, stack }, origin) => {
+// documentUrl is passed only when the app has no inline scripts, so a frame on the page itself was injected.
+export const isNoise = ({ error, message, name, stack }, origin, documentUrl) => {
   if (!error && /^Script error\.?$/.test(message)) return true
   if (/ResizeObserver loop/.test(message)) return true
+  if (name === 'TypeError' && NETWORK_FAILURES.has(message)) return true
   const url = frameUrl(topFrame(stack))
-  return Boolean(url) && !url.startsWith(`${origin}/`)
+  return Boolean(url) && (!url.startsWith(`${origin}/`) || url === documentUrl)
 }
 
 export const signature = ({ message, name, stack }) => `${name}|${message}|${topFrame(stack)}`
@@ -137,7 +141,8 @@ export function start (win) {
   }
 
   const capture = (kind, details) => {
-    if (isNoise(details, location.origin)) return
+    const inlineScripts = meta(document, 'informant-browser-inline-scripts') !== 'false'
+    if (isNoise(details, location.origin, inlineScripts ? undefined : withoutFragment(location.href))) return
     const now = Date.now()
     for (const [key, at] of seen) if (now - at >= DEDUPE_MS) seen.delete(key)
     const key = signature(details)
