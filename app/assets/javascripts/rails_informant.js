@@ -18,13 +18,13 @@ const topFrame = stack => String(stack).split('\n').find(frameUrl) || ''
 const withoutFragment = href => href.split('#')[0]
 const meta = (document, name) => document.querySelector(`meta[name="${name}"]`)?.content
 
-// documentUrl is passed only when the app has no inline scripts, so a frame on the page itself was injected.
-export const isNoise = ({ error, message, name, stack }, origin, documentUrl) => {
+// documentUrls is passed only when the app has no inline scripts, so a frame on any URL this document has had was injected.
+export const isNoise = ({ error, message, name, stack }, origin, documentUrls) => {
   if (!error && /^Script error\.?$/.test(message)) return true
   if (/ResizeObserver loop/.test(message)) return true
   if (name === 'TypeError' && NETWORK_FAILURES.has(message)) return true
   const url = frameUrl(topFrame(stack))
-  return Boolean(url) && (!url.startsWith(`${origin}/`) || url === documentUrl)
+  return Boolean(url) && (!url.startsWith(`${origin}/`) || Boolean(documentUrls?.has(url)))
 }
 
 export const signature = ({ message, name, stack }) => `${name}|${message}|${topFrame(stack)}`
@@ -98,6 +98,7 @@ export function start (win) {
   const crumbs = new Breadcrumbs()
   const networkFailures = new WeakSet()
   const seen = new Map()
+  const documentUrls = new Set([withoutFragment(location.href)])
   const send = win.fetch
   const state = win.__railsInformant
   let bytes = 0
@@ -142,7 +143,7 @@ export function start (win) {
 
   const capture = (kind, details) => {
     const inlineScripts = meta(document, 'informant-browser-inline-scripts') !== 'false'
-    if (isNoise(details, location.origin, inlineScripts ? undefined : withoutFragment(location.href))) return
+    if (isNoise(details, location.origin, inlineScripts ? undefined : documentUrls)) return
     const now = Date.now()
     for (const [key, at] of seen) if (now - at >= DEDUPE_MS) seen.delete(key)
     const key = signature(details)
@@ -206,6 +207,7 @@ export function start (win) {
   document.addEventListener('turbo:visit', ({ detail }) => crumbs.add('turbo.visit', path(detail.url), { action: detail.action }))
   document.addEventListener('turbo:load', ({ detail }) => {
     budget.reset()
+    documentUrls.add(withoutFragment(detail?.url ?? location.href))
     crumbs.add('turbo.visit', path(detail?.url ?? location.href))
   })
   document.addEventListener('turbo:before-fetch-response', ({ detail: { fetchResponse } }) => {
