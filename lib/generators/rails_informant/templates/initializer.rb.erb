@@ -32,4 +32,8 @@ RailsInformant.configure do |config|
 
   # Most new browser error groups created per hour (default 50)
   # config.browser_new_group_limit = 50
+
+  # Set to false when your pages have no inline scripts of their own, so browser
+  # errors whose top frame is the page itself are dropped as injected scripts
+  # config.browser_inline_scripts = false
 end
