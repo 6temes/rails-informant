@@ -1,10 +1,4 @@
 #!/usr/bin/env ruby
-# Usage: bin/stamp-version VERSION FILE
-#
-# Rewrites the VERSION literal in FILE so the built gem carries the release
-# tag's version. Exits non-zero, leaving FILE untouched, unless VERSION builds
-# as itself (1.2.3-rc1 would build as 1.2.3.pre.rc1) and FILE holds exactly one
-# VERSION literal.
 
 abort "usage: bin/stamp-version VERSION FILE" unless ARGV.size == 2
 
