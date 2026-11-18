@@ -1,27 +1,31 @@
 #!/usr/bin/env ruby
-
-require "open3"
+# Stamps a release version into version.rb before the gem is built:
+#
+#   bin/stamp-version VERSION FILE
+#
+# Stdlib only: the publish job installs no gems.
 
 abort "usage: bin/stamp-version VERSION FILE" unless ARGV.size == 2
-
 version, path = ARGV
 
+# `1.2.3-rc1` builds as `1.2.3.pre.rc1`, and the publish job pushes the gem file
+# named for the tag, which would then not exist.
 unless Gem::Version.correct?(version) && Gem::Version.new(version).to_s == version
   abort "stamp-version: #{version.inspect} is not a canonical gem version"
 end
 
 pattern = /^(\s*VERSION = )"[^"]*"$/
-source = File.binread(path)
+source = File.read(path)
 count = source.scan(pattern).size
 abort "stamp-version: expected one VERSION literal in #{path}, found #{count}" unless count == 1
 
-File.binwrite path, source.sub(pattern) { "#{$1}\"#{version}\"" }
+File.write path, source.sub(pattern) { "#{$1}\"#{version}\"" }
 
-# Ruby, not the pattern, decides what the gem reports: a second assignment, a
-# block comment or a suffix the pattern cannot see would otherwise ship.
-loaded, status = Open3.capture2({ "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil }, RbConfig.ruby, "--disable-gems",
-  "-e", "load ARGV[0]; print RailsInformant::VERSION", path, err: File::NULL)
-unless status.success? && loaded == version
-  File.binwrite path, source
-  abort "stamp-version: #{path} loads as #{loaded.inspect}, not #{version.inspect}; restored it"
+# The pattern cannot see a block comment, a suffix or a later reassignment, so
+# Ruby loads the stamped file as `gem build` would and compares the constant
+# itself. Only the exit status is read: the file could print anything.
+check = "load ARGV[0]; exit(RailsInformant::VERSION == ARGV[1])"
+unless system({ "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil }, RbConfig.ruby, "-e", check, path, version, out: File::NULL, err: File::NULL)
+  File.write path, source
+  abort "stamp-version: #{path} does not load as #{version.inspect}; restored it"
 end
