@@ -1,0 +1,22 @@
+#!/usr/bin/env ruby
+# Usage: bin/stamp-version VERSION FILE
+#
+# Rewrites the VERSION literal in FILE so the built gem carries the release
+# tag's version. Exits non-zero, leaving FILE untouched, unless VERSION builds
+# as itself (1.2.3-rc1 would build as 1.2.3.pre.rc1) and FILE holds exactly one
+# VERSION literal.
+
+abort "usage: bin/stamp-version VERSION FILE" unless ARGV.size == 2
+
+version, path = ARGV
+
+unless Gem::Version.correct?(version) && Gem::Version.new(version).to_s == version
+  abort "stamp-version: #{version.inspect} is not a canonical gem version"
+end
+
+pattern = /^(\s*VERSION = )"[^"]*"$/
+source = File.read(path)
+count = source.scan(pattern).size
+abort "stamp-version: expected one VERSION literal in #{path}, found #{count}" unless count == 1
+
+File.write path, source.sub(pattern) { "#{$1}\"#{version}\"" }
