@@ -57,7 +57,7 @@ class StampVersionTest < ActiveSupport::TestCase
       # Prints the tag's head first, so a check that read the child's output would pass.
       ->(placeholder) { "#{placeholder}print \"1.\"\nVERSION = \"2.3\".freeze\n" }
     ].each do |rewrite|
-      source = File.read(VERSION_FILE).sub(/^\s*VERSION = .*\n/) { rewrite.(it) }
+      source = File.read(VERSION_FILE).sub(/^\s*VERSION = .*\n/) { |line| rewrite.(line) }
       File.write @path, source
 
       stderr, status = stamp "1.2.3"
