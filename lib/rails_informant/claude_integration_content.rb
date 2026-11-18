@@ -40,8 +40,8 @@ module RailsInformant
 
     # Directory of the installed gem, resolved from RubyGems rather than a
     # generator's source_root so it works on the host-app boot path. Never
-    # RailsInformant::VERSION — that constant is env-driven and resolves to the
-    # 0.0.0.dev fallback in host apps.
+    # RailsInformant::VERSION — a path or git install reports the 0.0.1.dev
+    # placeholder, since only a release build stamps the real version.
     def gem_dir
       Gem.loaded_specs["rails-informant"].gem_dir
     end

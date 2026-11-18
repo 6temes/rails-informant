@@ -61,7 +61,7 @@ module RailsInformant
     end
 
     # Display only — the drift decision uses the digest, not the version. Harmless
-    # that local path/git installs report 0.0.0.dev here; only published installs
+    # that local path/git installs report 0.0.1.dev here; only published installs
     # show a real number.
     def gem_version
       Gem.loaded_specs["rails-informant"]&.version&.to_s
