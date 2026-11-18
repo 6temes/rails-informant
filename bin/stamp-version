@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+require "open3"
+
 abort "usage: bin/stamp-version VERSION FILE" unless ARGV.size == 2
 
 version, path = ARGV
@@ -9,8 +11,17 @@ unless Gem::Version.correct?(version) && Gem::Version.new(version).to_s == versi
 end
 
 pattern = /^(\s*VERSION = )"[^"]*"$/
-source = File.read(path)
+source = File.binread(path)
 count = source.scan(pattern).size
 abort "stamp-version: expected one VERSION literal in #{path}, found #{count}" unless count == 1
 
-File.write path, source.sub(pattern) { "#{$1}\"#{version}\"" }
+File.binwrite path, source.sub(pattern) { "#{$1}\"#{version}\"" }
+
+# Ruby, not the pattern, decides what the gem reports: a second assignment, a
+# block comment or a suffix the pattern cannot see would otherwise ship.
+loaded, status = Open3.capture2({ "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil }, RbConfig.ruby, "--disable-gems",
+  "-e", "load ARGV[0]; print RailsInformant::VERSION", path, err: File::NULL)
+unless status.success? && loaded == version
+  File.binwrite path, source
+  abort "stamp-version: #{path} loads as #{loaded.inspect}, not #{version.inspect}; restored it"
+end

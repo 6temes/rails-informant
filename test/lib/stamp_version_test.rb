@@ -44,6 +44,20 @@ class RailsInformant::StampVersionTest < ActiveSupport::TestCase
     assert_equal "module RailsInformant\nend\n", File.read(@path)
   end
 
+  test "rejects a second VERSION assignment after the placeholder, leaving the file byte for byte unchanged" do
+    placeholder = File.read(@path)[/^\s*VERSION = .*$/]
+
+    [ "  VERSION = \"1.2.3\" # release version", "=begin\n  VERSION = \"1.2.3\"\n=end" ].each do |duplicate|
+      File.write @path, File.read(File.join(ROOT, "lib", "rails_informant", "version.rb")).sub(placeholder) { "#{placeholder}\n#{duplicate}" }
+      original = File.binread(@path)
+
+      _, status = stamp "2.0.0"
+
+      assert_not status.success?, "accepted #{duplicate.inspect}"
+      assert_equal original, File.binread(@path)
+    end
+  end
+
   private
     def stamp(version)
       _, stderr, status = Open3.capture3(RbConfig.ruby, SCRIPT, version, @path)
