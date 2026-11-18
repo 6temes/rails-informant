@@ -25,7 +25,7 @@ File.write path, source.sub(pattern) { "#{$1}\"#{version}\"" }
 # Ruby loads the stamped file as `gem build` would and compares the constant
 # itself. Only the exit status is read: the file could print anything.
 check = "load ARGV[0]; exit(RailsInformant::VERSION == ARGV[1])"
-unless system({ "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil }, RbConfig.ruby, "-e", check, path, version, out: File::NULL, err: File::NULL)
+unless system({ "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil }, RbConfig.ruby, "-e", check, File.expand_path(path), version, out: File::NULL, err: File::NULL)
   File.write path, source
   abort "stamp-version: #{path} does not load as #{version.inspect}; restored it"
 end
