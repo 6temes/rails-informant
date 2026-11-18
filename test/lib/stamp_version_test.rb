@@ -65,6 +65,7 @@ class StampVersionTest < ActiveSupport::TestCase
       assert_not status.success?, "stamped #{source.inspect}"
       assert_match "does not load as", stderr
       assert_equal source, File.read(@path)
+      assert_not File.exist?("#{@path}.stamped")
     end
   end
 
