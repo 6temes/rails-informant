@@ -6,7 +6,7 @@
 
   <div align="center">
     <a href="https://github.com/6temes/rails-informant/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-green"/></a>
-    <a href="https://www.ruby-lang.org/"><img alt="Ruby" src="https://img.shields.io/badge/ruby-4.0+-red.svg"/></a>
+    <a href="https://www.ruby-lang.org/"><img alt="Ruby" src="https://img.shields.io/badge/ruby-4.0.10+-red.svg"/></a>
     <a href="https://rubyonrails.org/"><img alt="Rails" src="https://img.shields.io/badge/rails-8.1+-red.svg"/></a>
   </div>
 
