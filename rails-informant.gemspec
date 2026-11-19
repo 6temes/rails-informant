@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
     "source_code_uri" => "https://github.com/6temes/rails-informant"
   }
 
-  spec.required_ruby_version = ">= 4.0"
+  spec.required_ruby_version = ">= 4.0.10"
 
   spec.files = Dir.chdir(__dir__) do
     Dir["{app,config,db,exe,lib,skills}/**/*", "LICENSE", "Rakefile", "README.md"]
